@@ -39,7 +39,7 @@ func NewNavigator(model *NavigatorModel) Navigator {
 	if model.Chrome {
 		navigator = new(ChromeNavigator)
 	} else {
-		// navigator = new(HttpNavigator)
+		navigator = new(SimpleNavigator)
 	}
 
 	navigator.SetModel(model)
