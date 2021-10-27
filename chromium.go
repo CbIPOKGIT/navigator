@@ -62,7 +62,7 @@ func (c *ChromeNavigator) gotoUrl(url string) error {
 			c.StatusCode = e.Response.Status
 		}
 		// waitPage()
-		if err := c.Page.Timeout(30*time.Second).WaitElementsMoreThan("body", 0); err != nil {
+		if err2 := c.Page.Timeout(30*time.Second).WaitElementsMoreThan("body", 0); err2 != nil {
 			err = errors.New("cannot_load_page")
 			c.StatusCode = -1
 			c.DestroyClient(true)
@@ -122,8 +122,6 @@ func (c *ChromeNavigator) CreateClientIfNeed() {
 	if c.Model.Mobile {
 		c.Page = c.Page.MustSetViewport(400, 800, 1, true)
 	}
-
-	return
 }
 
 func (c *ChromeNavigator) DestroyClient(must ...bool) {
