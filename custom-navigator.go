@@ -1,6 +1,10 @@
 package navigator
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,7 +25,7 @@ type BanFlags struct {
 type CustomNavigator struct {
 	BanFlags
 	CaptchaSolver
-	ProxyGetter    ProxyGetter
+	ProxySettings  *ProxySettings
 	CurrentProxy   string
 	StatusCode     int
 	Model          *NavigatorModel
@@ -29,32 +33,14 @@ type CustomNavigator struct {
 	DontTryAnyMore bool
 }
 
+type ProxyServerResponse struct {
+	Ok   bool   `json:"ok"`
+	Data string `json:"data"`
+}
+
 //-----------------------------------------Кастомные методы------------------------------------------
-func (c *CustomNavigator) SetProxyGetter(p ProxyGetter) {
-	if c.Model.ProxySettings.Countries != "" {
-		list := make([]string, 0)
-		for _, part := range strings.Split(c.Model.ProxySettings.Countries, ",") {
-			list = append(list, strings.TrimSpace(part))
-		}
-		p.FilterCountries(&list)
-	}
-	if c.Model.ProxySettings.NotCountries != "" {
-		list := make([]string, 0)
-		for _, part := range strings.Split(c.Model.ProxySettings.NotCountries, ",") {
-			list = append(list, strings.TrimSpace(part))
-		}
-		p.FilterExcludeCountries(&list)
-	}
-	if c.Model.ProxySettings.Http {
-		p.FilterHttp(true)
-	}
-	if c.Model.ProxySettings.Sock {
-		p.FilterSock(true)
-	}
-	if c.Model.ProxySettings.HighSpeed {
-		p.FilterHighSpeed(true)
-	}
-	c.ProxyGetter = p
+func (c *CustomNavigator) SetProxySettings(ps *ProxySettings) {
+	c.ProxySettings = ps
 }
 
 func (c *CustomNavigator) SetModel(model *NavigatorModel) {
@@ -98,7 +84,45 @@ func (c *CustomNavigator) ParseBanFlags() {
 
 func (c *CustomNavigator) GetProxy() string {
 	if c.CurrentProxy == "" && c.useProxy() {
-		c.CurrentProxy = c.ProxyGetter.GetProxy()
+		url := os.Getenv("PROXY_SERVER") + "/get-proxy"
+		url += "?token=" + os.Getenv("PROXY_TOKEN")
+		if c.ProxySettings.Countries != "" {
+			for _, country := range strings.Split(c.ProxySettings.Countries, ",") {
+				url += "&countries=" + strings.TrimSpace(country)
+			}
+		}
+		if c.ProxySettings.NotCountries != "" {
+			for _, country := range strings.Split(c.ProxySettings.NotCountries, ",") {
+				url += "&not_countries=" + strings.TrimSpace(country)
+			}
+		}
+		if c.ProxySettings.Http {
+			url += "&http=1"
+		}
+		if c.ProxySettings.Sock {
+			url += "&sock=1"
+		}
+		if c.ProxySettings.HighSpeed {
+			url += "&highspeed=1"
+		}
+
+		req, err := http.Get(url)
+		if err != nil {
+			return c.CurrentProxy
+		}
+		defer req.Body.Close()
+		res, err := io.ReadAll(req.Body)
+		if err != nil {
+			return c.CurrentProxy
+		}
+
+		proxyResponse := &ProxyServerResponse{}
+		if err := json.Unmarshal(res, proxyResponse); err != nil {
+			return c.CurrentProxy
+		}
+		if proxyResponse.Ok {
+			c.CurrentProxy = proxyResponse.Data
+		}
 	}
 	return c.CurrentProxy
 }

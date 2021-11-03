@@ -1,6 +1,8 @@
 package navigator
 
 import (
+	"os"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/go-rod/rod"
 )
@@ -11,21 +13,12 @@ const (
 
 type Navigator interface {
 	NavigateUrl(url string) error
-	SetProxyGetter(ProxyGetter)
+	SetProxySettings(*ProxySettings)
 	SetModel(*NavigatorModel)
 	GetCrawler() *goquery.Document
 	GetNavigateStatus() int
 	DestroyClient(must ...bool)
 	SetCaptchaSolver(CaptchaSolver)
-}
-
-type ProxyGetter interface {
-	GetProxy() string
-	FilterCountries(*[]string)
-	FilterExcludeCountries(*[]string)
-	FilterHttp(bool)
-	FilterSock(bool)
-	FilterHighSpeed(bool)
 }
 
 type CaptchaSolver interface {
@@ -49,7 +42,7 @@ func NewNavigator(model *NavigatorModel) Navigator {
 
 //-------------------------------------------Геттеры свойств------------------------------------------
 func (c *CustomNavigator) useProxy() bool {
-	return !c.Model.DontUseProxy && c.Model.BanFlags != "" && c.ProxyGetter != nil
+	return !c.Model.DontUseProxy && c.Model.BanFlags != "" && c.ProxySettings != nil && os.Getenv("PROXY_SERVER") != "" && os.Getenv("PROXY_TOKEN") != ""
 }
 
 func (c *CustomNavigator) ban() bool {
