@@ -16,6 +16,8 @@ type SimpleNavigator struct {
 }
 
 func (s *SimpleNavigator) NavigateUrl(url string) error {
+	s.Sleep(s.Model.DelayBeforeNavigation)
+
 	if err := s.gotoUrl(url); err != nil {
 		return err
 	}
@@ -42,15 +44,19 @@ func (s *SimpleNavigator) gotoUrl(url string) error {
 		if err != nil {
 			s.StatusCode = -1
 			s.DestroyClient(true)
-			return err
+			continue
+		} else {
+			s.StatusCode = resp.StatusCode
 		}
+
 		html, err := io.ReadAll(resp.Body)
 		if err != nil {
 			s.StatusCode = -1
 			s.DestroyClient(true)
-			return err
+			continue
 		}
 		s.CreateCrawler(string(html))
+		s.Sleep(s.Model.DelayAfterNavigation)
 
 		if s.ban() {
 			s.StatusCode = 0
@@ -62,6 +68,7 @@ func (s *SimpleNavigator) gotoUrl(url string) error {
 	s.DontTryAnyMore = true
 	return err
 }
+
 func (s *SimpleNavigator) CreateClientIfNeed() {
 	if s.Client != nil {
 		return

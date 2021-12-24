@@ -45,6 +45,7 @@ func (c *CustomNavigator) SetProxySettings(ps *ProxySettings) {
 
 func (c *CustomNavigator) SetModel(model *NavigatorModel) {
 	c.Model = model
+	c.SetProxySettings(&model.ProxySettings)
 	c.ParseBanFlags()
 }
 
@@ -83,48 +84,58 @@ func (c *CustomNavigator) ParseBanFlags() {
 }
 
 func (c *CustomNavigator) GetProxy() string {
-	if c.CurrentProxy == "" && c.useProxy() {
-		url := os.Getenv("PROXY_SERVER") + "/get-proxy"
-		url += "?token=" + os.Getenv("PROXY_TOKEN")
-		if c.ProxySettings.Countries != "" {
-			for _, country := range strings.Split(c.ProxySettings.Countries, ",") {
-				url += "&countries=" + strings.TrimSpace(country)
-			}
-		}
-		if c.ProxySettings.NotCountries != "" {
-			for _, country := range strings.Split(c.ProxySettings.NotCountries, ",") {
-				url += "&not_countries=" + strings.TrimSpace(country)
-			}
-		}
-		if c.ProxySettings.Http {
-			url += "&http=1"
-		}
-		if c.ProxySettings.Sock {
-			url += "&sock=1"
-		}
-		if c.ProxySettings.HighSpeed {
-			url += "&highspeed=1"
-		}
-
+	if c.CurrentProxy != "" || !c.useProxy() {
+		return c.CurrentProxy
+	}
+	for _, server := range strings.Split(os.Getenv("PROXY_SERVER"), ",") {
+		url := prepareProxyUrlString(server, c.ProxySettings)
 		req, err := http.Get(url)
 		if err != nil {
-			return c.CurrentProxy
+			continue
 		}
 		defer req.Body.Close()
 		res, err := io.ReadAll(req.Body)
 		if err != nil {
-			return c.CurrentProxy
+			continue
 		}
 
 		proxyResponse := &ProxyServerResponse{}
 		if err := json.Unmarshal(res, proxyResponse); err != nil {
+			continue
+		}
+
+		if proxyResponse.Ok && proxyResponse.Data != "" {
+			c.CurrentProxy = proxyResponse.Data
 			return c.CurrentProxy
 		}
-		if proxyResponse.Ok {
-			c.CurrentProxy = proxyResponse.Data
+	}
+
+	return c.CurrentProxy
+}
+
+func prepareProxyUrlString(server string, ps *ProxySettings) string {
+	url := strings.TrimSpace(server) + "/get-proxy"
+	url += "?token=" + os.Getenv("PROXY_TOKEN")
+	if ps.Countries != "" {
+		for _, country := range strings.Split(ps.Countries, ",") {
+			url += "&countries=" + strings.TrimSpace(country)
 		}
 	}
-	return c.CurrentProxy
+	if ps.NotCountries != "" {
+		for _, country := range strings.Split(ps.NotCountries, ",") {
+			url += "&not_countries=" + strings.TrimSpace(country)
+		}
+	}
+	if ps.Http {
+		url += "&http=1"
+	}
+	if ps.Sock {
+		url += "&sock=1"
+	}
+	if ps.HighSpeed {
+		url += "&highspeed=1"
+	}
+	return url
 }
 
 func (c *CustomNavigator) CreateCrawler(html string) {

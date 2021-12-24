@@ -29,7 +29,6 @@ func (c *ChromeNavigator) NavigateUrl(url string) error {
 func (c *ChromeNavigator) gotoUrl(url string) error {
 	var err error
 	for try := 0; try < NAVIGATION_MAX_TRIES_COUNT; try++ {
-		log.Printf("Try number %d\n", try)
 		if try > 0 && c.DontTryAnyMore {
 			err = errors.New("cannot_load_page")
 			break
@@ -62,7 +61,7 @@ func (c *ChromeNavigator) gotoUrl(url string) error {
 			c.StatusCode = e.Response.Status
 		}
 		// waitPage()
-		if err2 := c.Page.Timeout(30*time.Second).WaitElementsMoreThan("body", 0); err2 != nil {
+		if err2 := c.getWaitPageStatus(); err2 != nil {
 			err = errors.New("cannot_load_page")
 			c.StatusCode = -1
 			c.DestroyClient(true)
@@ -70,7 +69,15 @@ func (c *ChromeNavigator) gotoUrl(url string) error {
 		}
 
 		c.Sleep(c.Model.DelayAfterNavigation)
-		c.CreateCrawler(c.getPageHtml())
+
+		var html = ""
+		if html, err = c.getPageHtml(); err == nil {
+			c.CreateCrawler(html)
+		} else {
+			c.StatusCode = -1
+			c.DestroyClient(true)
+			continue
+		}
 
 		if c.ban() {
 			c.StatusCode = 0
@@ -103,20 +110,31 @@ func (c *ChromeNavigator) solveCaptcha() {
 		} else {
 			if solved {
 				c.Sleep(c.Model.DelayAfterNavigation)
-				c.CreateCrawler(c.getPageHtml())
+				html, _ := c.getPageHtml()
+				c.CreateCrawler(html)
 			}
 		}
+	}
+
+	if c.ban() {
+		c.StatusCode = 0
 	}
 }
 
 func (c *ChromeNavigator) CreateClientIfNeed() {
 	if c.Browser != nil && c.Page != nil {
+		if c.Model.CloseEveryTime {
+			c.CloseAndCreateTab()
+		}
 		return
 	}
 	c.Browser, c.Page = nil, nil
 
-	rodLauncher := launcher.New().Headless(!c.Model.Visible).Proxy(c.GetProxy()).MustLaunch()
-	c.Browser = rod.New().ControlURL(rodLauncher).MustConnect()
+	rodLauncher := launcher.New().Headless(!c.Model.Visible).Proxy(c.GetProxy())
+	if !c.Model.ShowImg {
+		rodLauncher.Set("--blink-settings=imagesEnabled", "false")
+	}
+	c.Browser = rod.New().ControlURL(rodLauncher.MustLaunch()).MustConnect()
 	c.Page = c.Browser.MustPage()
 
 	if c.Model.Mobile {
@@ -135,32 +153,34 @@ func (c *ChromeNavigator) DestroyClient(must ...bool) {
 	}
 }
 
+//Создаем новую вкладку, закрываем старую
+func (c *ChromeNavigator) CloseAndCreateTab() {
+	newPage := c.Browser.MustPage()
+	c.Page.Close()
+	c.Page = newPage
+}
+
 //Получаем HTML в виде строки со страницы
-func (c *ChromeNavigator) getPageHtml() string {
+func (c *ChromeNavigator) getPageHtml() (string, error) {
 	if html, err := c.Page.Element("html"); err == nil {
-		return html.MustHTML()
+		return html.HTML()
 	} else {
 		log.Println(err)
 	}
 	if body, err := c.Page.Element("body"); err == nil {
-		return body.MustHTML()
+		return body.HTML()
 	} else {
 		log.Println(err)
 	}
-	return ""
+	return "", errors.New("no_page_html")
 }
 
 //Вычисляем признак загрузки страницы
-func (c *ChromeNavigator) getWaitPageStatus() func() {
-	var waitEvent proto.PageLifecycleEventName
-	switch c.Model.ChromeWaitFor {
-	case "networkidle2":
-		waitEvent = proto.PageLifecycleEventNameNetworkAlmostIdle
-	case "networkidle0":
-		waitEvent = proto.PageLifecycleEventNameNetworkIdle
-	default:
-		// waitEvent = proto.PageLifecycleEventNameDOMContentLoaded
-		waitEvent = proto.PageLifecycleEventNameFirstContentfulPaint
+func (c *ChromeNavigator) getWaitPageStatus() error {
+	timeout := c.Page.Timeout(30 * time.Second)
+	if c.Model.ChromeWaitFor == "" {
+		return timeout.WaitLoad()
+	} else {
+		return timeout.WaitElementsMoreThan(c.Model.ChromeWaitFor, 0)
 	}
-	return c.Page.Timeout(20 * time.Second).WaitNavigation(waitEvent)
 }
