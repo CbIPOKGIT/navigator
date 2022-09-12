@@ -46,6 +46,17 @@ func (chn *ChromeNavigator) GetPage() *rod.Page {
 	return chn.page
 }
 
+func (chn *ChromeNavigator) RefreshCrawler() error {
+	if chn.page != nil {
+		if html, err := chn.page.HTML(); err == nil {
+			return chn.createCrawler(html)
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
 // ------------------------------------------------------------
 
 func (chn *ChromeNavigator) checkIfClientExist() error {
@@ -62,7 +73,7 @@ func (chn *ChromeNavigator) hasClient() bool {
 
 // Запускаємо браузер та створюємо сторінку
 func (chn *ChromeNavigator) createClient() error {
-	l := launcher.New().Headless(chn.model.visible)
+	l := launcher.New().Headless(!chn.model.visible)
 
 	cs, err := l.Launch()
 	if err != nil {
