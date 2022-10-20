@@ -2,6 +2,7 @@ package navigator
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -96,18 +97,22 @@ func (chn *ChromeNavigator) gotoUrl(url string) error {
 			return err
 		}
 
-		e := proto.NetworkResponseReceived{}
-		wait := chn.page.WaitEvent(&e)
-
 		if errLoadPage = chn.page.Navigate(url); errLoadPage != nil {
+			chn.Close()
 			continue
 		}
 
-		if errLoadPage = chn.waitPageLoad(wait); errLoadPage != nil {
+		if errLoadPage = chn.WaitPageLoad(); errLoadPage != nil {
+			chn.Close()
 			continue
 		}
 
-		chn.CommonNavigator.NavigateStatus = e.Response.Status
+		if chn.model.BeatRecaptcha() {
+			if errLoadPage = chn.HandleRecaptcha(); errLoadPage != nil {
+				chn.Close()
+				continue
+			}
+		}
 
 		if html, err := chn.page.HTML(); err == nil {
 			errLoadPage = chn.createCrawler(html)
@@ -125,8 +130,32 @@ func (chn *ChromeNavigator) gotoUrl(url string) error {
 	return errLoadPage
 }
 
+func (chn *ChromeNavigator) WaitPageLoad() error {
+
+	e := proto.NetworkResponseReceived{}
+	wait := chn.page.WaitEvent(&e)
+	waitIdle := chn.page.WaitNavigation(proto.PageLifecycleEventNameLoad)
+
+	log.Println("Wait for response")
+
+	if err := chn.waitPage(wait); err != nil {
+		return err
+	}
+
+	chn.CommonNavigator.NavigateStatus = e.Response.Status
+	log.Println("Status", e.Response.Status)
+
+	log.Println("Wait for page load")
+	if err := chn.waitPage(waitIdle); err != nil {
+		return err
+	}
+	log.Println("Loaded")
+
+	return nil
+}
+
 // Чекаэмо завантаження сторінки
-func (chn *ChromeNavigator) waitPageLoad(wait func()) error {
+func (chn *ChromeNavigator) waitPage(wait func()) error {
 	timeout := time.NewTimer(time.Second * time.Duration(TIMEOUT_ERROR))
 	ch := make(chan interface{}, 1)
 

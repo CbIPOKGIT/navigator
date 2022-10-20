@@ -21,8 +21,14 @@ type CommonNavigator struct {
 	// Поточний домен
 	Domen string
 
+	Origin string
+
 	// GoQuery об'єкт, де лежить DOM дерево сторінки
 	crawler *goquery.Document
+
+	// Кількість спроб для навігації
+	// Якщо 0, то вираховується функцією
+	triesCount int
 }
 
 func (cn *CommonNavigator) SetModel(model *Model) {
@@ -37,9 +43,38 @@ func (cn *CommonNavigator) GetCrawler() *goquery.Document {
 	return cn.crawler
 }
 
+// Метод інтерфейсу. Форматуємо лінк відносно поточного домену
+func (ch *CommonNavigator) FormatUrl(href string) string {
+	re := regexp.MustCompile(`(?mi)^http`)
+
+	if re.Match([]byte(href)) {
+		return href
+	}
+
+	re = regexp.MustCompile(`(?mi)^/`)
+
+	if re.Match([]byte(href)) {
+		return ch.Origin + href
+	}
+
+	re = regexp.MustCompile(`(?mi)/$`)
+
+	if re.Match([]byte(ch.URL)) {
+		return ch.URL + href
+	} else {
+		return ch.URL + "/" + href
+	}
+}
+
 // Визначаэмо скільки є спроб перейти по URL
 // По замовчуваню: якщо використовуємо проксі - 10, інакше одна
 func (ch *CommonNavigator) getTriesCount() int {
+	if ch.triesCount != 0 {
+		return ch.triesCount
+	}
+	if ch.model.UseProxy() {
+		return 5
+	}
 	return 1
 }
 
@@ -66,6 +101,10 @@ func (ch *CommonNavigator) parseUrl(url string) error {
 
 	ch.Domen = domen
 	ch.URL = url
+
+	regRep = regexp.MustCompile(`(?mi)https?:\/\/[^\/]+`)
+
+	ch.Origin = regRep.FindString(url)
 
 	return nil
 }

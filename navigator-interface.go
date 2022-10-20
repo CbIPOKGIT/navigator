@@ -17,6 +17,9 @@ type Navigator interface {
 
 	// Закрити клієнт
 	Close() error
+
+	// Форматуємо лінк відносно поточного домену
+	FormatUrl(string) string
 }
 
 func NewNavigator(model *Model) Navigator {
@@ -28,6 +31,8 @@ func NewNavigator(model *Model) Navigator {
 
 	if model.UseChrome() {
 		navigator = new(ChromeNavigator)
+	} else {
+		navigator = new(HttpClient)
 	}
 
 	navigator.SetModel(model)
