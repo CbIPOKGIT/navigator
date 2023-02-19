@@ -51,6 +51,14 @@ func (ch *CommonNavigator) FormatUrl(href string) string {
 		return href
 	}
 
+	re = regexp.MustCompile(`(?mi)^\?`)
+
+	if re.Match([]byte(href)) {
+		re = regexp.MustCompile(`(?mi)\?.*`)
+		link := re.ReplaceAllString(ch.URL, "")
+		return link + href
+	}
+
 	re = regexp.MustCompile(`(?mi)^/`)
 
 	if re.Match([]byte(href)) {
