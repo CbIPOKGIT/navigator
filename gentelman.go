@@ -2,6 +2,7 @@ package navigator
 
 import (
 	"crypto/tls"
+	"net/http"
 	"time"
 
 	"gopkg.in/h2non/gentleman.v2"
@@ -24,6 +25,18 @@ func (htp *HttpClient) Navigate(url string) error {
 func (htp *HttpClient) Close() error {
 	htp.client = nil
 	return nil
+}
+
+func (htp *HttpClient) GetClient() *gentleman.Client {
+	return htp.client
+}
+
+func (htp *HttpClient) SetCookie(name, value string, maxage int) {
+	htp.client.AddCookie(&http.Cookie{
+		Name:   name,
+		Value:  value,
+		MaxAge: maxage,
+	})
 }
 
 // ---------------------------------------------------------------------

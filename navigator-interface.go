@@ -20,6 +20,10 @@ type Navigator interface {
 
 	// Форматуємо лінк відносно поточного домену
 	FormatUrl(string) string
+
+	// Записуємо необхідні куки
+	// name, value, maxage стандартні поля для http.Cookie{}
+	SetCookie(name, value string, maxage int)
 }
 
 func NewNavigator(model *Model) Navigator {
