@@ -15,10 +15,18 @@ const (
 )
 
 func (chn *ChromeNavigator) HandleRecaptcha() error {
-	if !chn.hasRecaptcha() {
-		return nil
+	var tries int = 3
+
+	for i := 0; i < tries; i++ {
+		if !chn.hasRecaptcha() {
+			return nil
+		}
+		if err := chn.resolveRecaptcha(); err != nil {
+			return err
+		}
 	}
-	return chn.resolveRecaptcha()
+
+	return nil
 }
 
 func (chn *ChromeNavigator) hasRecaptcha() bool {
