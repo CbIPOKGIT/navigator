@@ -3,6 +3,7 @@ package navigator
 import (
 	"errors"
 	"log"
+	"os"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -58,6 +59,10 @@ func (chn *ChromeNavigator) RefreshCrawler() error {
 	return nil
 }
 
+func (chn *ChromeNavigator) SetCookie(key, value string, expired int) {
+	// Need do
+}
+
 // ------------------------------------------------------------
 
 func (chn *ChromeNavigator) checkIfClientExist() error {
@@ -75,6 +80,12 @@ func (chn *ChromeNavigator) hasClient() bool {
 // Запускаємо браузер та створюємо сторінку
 func (chn *ChromeNavigator) createClient() error {
 	l := launcher.New().Headless(!chn.model.visible)
+
+	// Вимкнення LEAKNESS режиму.
+	// https://pkg.go.dev/github.com/go-rod/rod@v0.79.0/lib/launcher#Launcher.Leakless
+	if os.Getenv("DISABLE_LEAKLESS") == "1" {
+		l = l.Leakless(false)
+	}
 
 	cs, err := l.Launch()
 	if err != nil {
