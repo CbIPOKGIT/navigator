@@ -63,14 +63,8 @@ func (ch *CommonNavigator) FormatUrl(href string) string {
 
 	if re.Match([]byte(href)) {
 		return ch.Origin + href
-	}
-
-	re = regexp.MustCompile(`(?mi)/$`)
-
-	if re.Match([]byte(ch.URL)) {
-		return ch.URL + href
 	} else {
-		return ch.URL + "/" + href
+		return ch.Origin + "/" + href
 	}
 }
 
