@@ -3,6 +3,7 @@ package navigator
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -12,6 +13,7 @@ import (
 
 const (
 	DEFAULT_BROWSER_NAVIGATION_TIMEOUT = 60
+	CHALLANGE_TRIES_MAX_DURATION       = 30 // Challange beet max duration time
 )
 
 type ChromeNavigator struct {
@@ -21,6 +23,7 @@ type ChromeNavigator struct {
 	Page    *rod.Page
 }
 
+// Interface implementation
 func (navigator *ChromeNavigator) Close() error {
 	if navigator.Page != nil {
 		if err := navigator.Page.Close(); err != nil {
@@ -40,12 +43,24 @@ func (navigator *ChromeNavigator) Close() error {
 	return nil
 }
 
+// Interface implementation
 func (navigator *ChromeNavigator) Navigate(url string) error {
 	if err := navigator.writeAndFormatURL(url); err != nil {
 		return err
 	}
 
 	return navigator.navigateUrl()
+}
+
+// Evaluate script
+func (navigator *ChromeNavigator) Evaluate(script string, args ...string) (string, error) {
+	navigator.createClientIfNeed()
+
+	result, err := navigator.Page.Eval(script, args)
+	if err != nil {
+		return "", err
+	}
+	return result.Value.Str(), nil
 }
 
 func (navigator *ChromeNavigator) navigateUrl() error {
@@ -66,18 +81,9 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			break
 		}
 
-		response, err := navigator.waitPageResponse(navigator.Url)
-		if err != nil {
-			navigator.LastError = err
+		if err := navigator.waitTotalLoad(navigator.Url); err != nil {
 			continue
 		}
-
-		if err := navigator.waitPageLoaded(); err != nil {
-			navigator.LastError = err
-			continue
-		}
-
-		navigator.NavigateStatus = response.Response.Status
 
 		html, err := navigator.Page.HTML()
 		if err != nil {
@@ -89,14 +95,24 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			time.Sleep(time.Second * time.Duration(navigator.Model.DelayBeforeRead))
 		}
 
-		if err := navigator.createCrawlerFromHTML(html); err != nil {
-			navigator.LastError = errors.New(fmt.Sprintf("Error create crawler from HTML: %s", err.Error()))
-			continue
-		}
-
 		if navigator.JustCreated && navigator.Model.EmptyLoad && !reloading {
 			i = -1
 			reloading = true
+			continue
+		}
+
+		if err := navigator.beatChallange(); err != nil {
+			navigator.LastError = err
+			continue
+		}
+
+		if err := navigator.solveCaptcha(); err != nil {
+			navigator.LastError = err
+			continue
+		}
+
+		if err := navigator.createCrawlerFromHTML(html); err != nil {
+			navigator.LastError = errors.New(fmt.Sprintf("Error create crawler from HTML: %s", err.Error()))
 			continue
 		}
 
@@ -108,8 +124,26 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 	return navigator.LastError
 }
 
+// Wait for url response and sign page loaded
+func (navigator *ChromeNavigator) waitTotalLoad(url ...string) error {
+	response, err := navigator.waitPageResponse(url...)
+	if err != nil {
+		navigator.LastError = err
+		return err
+	}
+
+	if err := navigator.waitPageLoaded(); err != nil {
+		navigator.LastError = err
+		return err
+	}
+
+	navigator.LastError = nil
+	navigator.NavigateStatus = response.Response.Status
+	return nil
+}
+
 // Wait for url response
-func (navigator *ChromeNavigator) waitPageResponse(url string) (*proto.NetworkResponseReceived, error) {
+func (navigator *ChromeNavigator) waitPageResponse(url ...string) (*proto.NetworkResponseReceived, error) {
 	response := proto.NetworkResponseReceived{}
 	wait := navigator.Page.WaitEvent(&response)
 
@@ -121,8 +155,10 @@ func (navigator *ChromeNavigator) waitPageResponse(url string) (*proto.NetworkRe
 
 	timeout := time.NewTimer(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
 
-	if err := navigator.Page.Navigate(url); err != nil {
-		return nil, err
+	if len(url) > 0 {
+		if err := navigator.Page.Navigate(url[0]); err != nil {
+			return nil, err
+		}
 	}
 
 	select {
@@ -180,6 +216,7 @@ func (navigator *ChromeNavigator) getPageLoadTimeout() int {
 	}
 }
 
+// If page is nil - create new page
 func (navigator *ChromeNavigator) createClientIfNeed() error {
 	if navigator.Page != nil {
 		navigator.JustCreated = false
@@ -219,9 +256,84 @@ func (navigator *ChromeNavigator) createClientIfNeed() error {
 		return err
 	}
 
-	navigator.Browser = rod.New().ControlURL(u).MustConnect()
+	navigator.Browser = rod.New().ControlURL(u).MustConnect().NoDefaultDevice()
 	navigator.Page = navigator.Browser.MustPage()
 	navigator.JustCreated = true
 
+	return nil
+}
+
+// Beat the challange. Its something like Cloudflare protection.
+//
+// Max reloads count - 5
+func (navigator *ChromeNavigator) beatChallange() error {
+	if navigator.Model.ChallangeSelector == "" {
+		return nil
+	}
+
+	var stopReloading atomic.Bool
+
+	successChannel := make(chan error)
+
+	go func() {
+		for {
+			if stopReloading.Load() {
+				return
+			}
+
+			elements, err := navigator.Page.Elements(navigator.Model.ChallangeSelector)
+			if err != nil {
+				successChannel <- err
+				return
+			}
+
+			if elements.Empty() {
+				successChannel <- nil
+				return
+			}
+
+			if err := navigator.waitTotalLoad(); err != nil {
+				successChannel <- err
+				return
+			}
+		}
+	}()
+
+	timer := time.NewTimer(time.Second * CHALLANGE_TRIES_MAX_DURATION)
+
+	select {
+	case err := <-successChannel:
+		stopReloading.Store(true)
+		return err
+	case <-timer.C:
+		stopReloading.Store(true)
+		return errors.New("Unable pass challange form")
+	}
+}
+
+// Solve captcha if presented
+func (navigator *ChromeNavigator) solveCaptcha() error {
+	if navigator.Model.CaptchaSelector == "" || navigator.CptchSolver == nil {
+		return nil
+	}
+
+	elements, err := navigator.Page.Elements(navigator.Model.CaptchaSelector)
+	if err != nil {
+		return err
+	}
+
+	hasCaptcha := elements.Empty() == navigator.Model.CaptchaSelectorInverted
+	if !hasCaptcha {
+		return nil
+	}
+
+	navigator.CptchSolver.SetPage(navigator.Page)
+	solved, err := navigator.CptchSolver.Solve()
+	if err != nil {
+		return err
+	}
+	if !solved {
+		return errors.New("Unable to solve captcha")
+	}
 	return nil
 }
