@@ -47,7 +47,7 @@ type Model struct {
 	CaptchaSelector string `json:"captcha_selector"`
 
 	// Captcha selector inverted, so if there is no element by selector - there is a captcha
-	CaptchaSelectorInterted bool `json:"captcha_selector_inverted"`
+	CaptchaSelectorInverted bool `json:"captcha_selector_inverted"`
 
 	// List of initial cookies on page
 	InitialCookies map[string]string `json:"initial_cookies"`
