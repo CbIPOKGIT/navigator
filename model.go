@@ -52,8 +52,11 @@ type Model struct {
 	// List of initial cookies on page
 	InitialCookies map[string]string `json:"initial_cookies"`
 
-	// JS script wich eval before reading DOM tree
+	// JS script wich eval after first navigation
 	PreScript string `json:"pre_script"`
+
+	// Wait reload after prescript execute
+	PreScriptNeedReload bool `json:"pre_scrpit_need_reload"`
 
 	// Selector for challange form
 	ChallangeSelector string `json:"challange_selector"`

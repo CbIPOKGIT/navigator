@@ -85,6 +85,13 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			continue
 		}
 
+		if navigator.JustCreated {
+			if err := navigator.executePreScript(); err != nil {
+				navigator.LastError = err
+				continue
+			}
+		}
+
 		html, err := navigator.Page.HTML()
 		if err != nil {
 			navigator.LastError = errors.New(fmt.Sprintf("Error read HTML from page: %s", err.Error()))
@@ -336,4 +343,22 @@ func (navigator *ChromeNavigator) solveCaptcha() error {
 		return errors.New("Unable to solve captcha")
 	}
 	return nil
+}
+
+// Execute pre script
+func (navigator *ChromeNavigator) executePreScript() error {
+	if navigator.Model.PreScript == "" {
+		return nil
+	}
+
+	_, err := navigator.Evaluate(navigator.Model.PreScript)
+	if err != nil {
+		return err
+	}
+
+	if navigator.Model.PreScriptNeedReload {
+		err = navigator.waitTotalLoad()
+	}
+
+	return err
 }
