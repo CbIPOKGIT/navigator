@@ -9,34 +9,43 @@ type Navigator interface {
 	// Відкриваємо URL
 	Navigate(url string) error
 
+	// Взяти DOM дерево після навігації
+	GetCrawler() *goquery.Document
+
 	// Статус код навігації
 	GetNavigateStatus() int
 
-	// Взяти DOM дерево після навігації
-	GetCrawler() *goquery.Document
+	// Last error
+	GetLastError() error
 
 	// Закрити клієнт
 	Close() error
 
+	// Set captcha solver
+	SetCaptchaSolver(CaptchaSolver)
+
+	// Set proxy getter
+	SetProxyGetter(ProxyGetter)
+
 	// Форматуємо лінк відносно поточного домену
-	FormatUrl(string) string
+	// FormatUrl(string) string
 
 	// Записуємо необхідні куки
 	// name, value, maxage стандартні поля для http.Cookie{}
-	SetCookie(name, value string, maxage int)
+	// SetCookie(name, value string, maxage int)
 }
 
 func NewNavigator(model *Model) Navigator {
 	if model == nil {
-		model = new(Model)
+		model = &Model{}
 	}
 
 	var navigator Navigator
 
-	if model.UseChrome() {
+	if model.Chrome {
 		navigator = new(ChromeNavigator)
 	} else {
-		navigator = new(HttpClient)
+		navigator = new(GentelmanNavigator)
 	}
 
 	navigator.SetModel(model)
