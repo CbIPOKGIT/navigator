@@ -129,7 +129,18 @@ func (navigator *CommonNavigator) createCrawlerFromHTML(html string) error {
 		return err
 	}
 
-	navigator.Crawler = crawler
+	if navigator.Model.ReadOnlySelector != "" {
+		node := crawler.Find(navigator.Model.ReadOnlySelector)
+		if node.Size() == 0 {
+			navigator.Crawler = new(goquery.Document)
+		} else {
+			navigator.Crawler = goquery.NewDocumentFromNode(node.Get(0))
+		}
+
+	} else {
+		navigator.Crawler = crawler
+	}
+
 	return nil
 }
 

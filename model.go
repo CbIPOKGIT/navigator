@@ -34,6 +34,9 @@ type Model struct {
 	// For the first page load we need load once more
 	EmptyLoad bool `json:"empty_load"`
 
+	// Read only some node from crawler
+	ReadOnlySelector string `json:"read_only_selector"`
+
 	// Chrome user agent
 	UserAgent string `json:"user_agent"`
 
