@@ -63,6 +63,9 @@ type Model struct {
 
 	// Bad statuses to check is domen banned us or not
 	BanSettings []*BanFlags `json:"ban_settings"`
+
+	// Close client after every navigation
+	ClosePageEverytime bool `json:"close_page_everytime"`
 }
 
 type BanFlags struct {

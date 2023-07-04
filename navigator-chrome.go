@@ -25,22 +25,32 @@ type ChromeNavigator struct {
 
 // Interface implementation
 func (navigator *ChromeNavigator) Close() error {
+	var errPage, errBrowser error = navigator.closePage(), navigator.closeBrowser()
+	if errPage != nil {
+		return errPage
+	}
+	if errBrowser != nil {
+		return errBrowser
+	}
+	return nil
+}
+
+func (navigator *ChromeNavigator) closePage() error {
+	var err error
 	if navigator.Page != nil {
-		if err := navigator.Page.Close(); err != nil {
-			return err
-		}
+		err = navigator.Page.Close()
 		navigator.Page = nil
 	}
+	return err
+}
 
+func (navigator *ChromeNavigator) closeBrowser() error {
+	var err error
 	if navigator.Browser != nil && !navigator.Model.UseSystemChrome {
-		if err := navigator.Close(); err != nil {
-			return err
-		}
-
+		err = navigator.Close()
 		navigator.Browser = nil
 	}
-
-	return nil
+	return err
 }
 
 // Interface implementation
@@ -64,6 +74,10 @@ func (navigator *ChromeNavigator) Evaluate(script string, args ...string) (strin
 }
 
 func (navigator *ChromeNavigator) navigateUrl() error {
+	if navigator.Model.ClosePageEverytime && navigator.Page != nil {
+		navigator.Page.Close()
+	}
+
 	var reloading bool = false
 
 	for i := 0; i < navigator.calculateTriesCount(); i++ {
@@ -230,6 +244,21 @@ func (navigator *ChromeNavigator) createClientIfNeed() error {
 		return nil
 	}
 
+	if navigator.Browser == nil {
+		var err error
+		navigator.Browser, err = navigator.createBrowser()
+		if err != nil {
+			return err
+		}
+	}
+
+	navigator.Page = navigator.Browser.MustPage()
+	navigator.JustCreated = true
+
+	return nil
+}
+
+func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	var u string
 	var err error
 
@@ -260,14 +289,10 @@ func (navigator *ChromeNavigator) createClientIfNeed() error {
 	}
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	navigator.Browser = rod.New().ControlURL(u).MustConnect().NoDefaultDevice()
-	navigator.Page = navigator.Browser.MustPage()
-	navigator.JustCreated = true
-
-	return nil
+	return rod.New().ControlURL(u).MustConnect().NoDefaultDevice(), nil
 }
 
 // Beat the challange. Its something like Cloudflare protection.
