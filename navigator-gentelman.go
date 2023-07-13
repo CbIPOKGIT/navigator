@@ -60,7 +60,7 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 			continue
 		}
 
-		if navigator.checkNavigateStatus(i) {
+		if navigator.isValidResponse(i) {
 			break
 		}
 	}

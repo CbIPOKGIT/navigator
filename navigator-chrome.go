@@ -96,6 +96,7 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 		}
 
 		if err := navigator.waitTotalLoad(navigator.Url); err != nil {
+			navigator.LastError = err
 			continue
 		}
 
@@ -137,7 +138,7 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			continue
 		}
 
-		if navigator.checkNavigateStatus(i) {
+		if navigator.isValidResponse(i) {
 			break
 		}
 	}
@@ -149,12 +150,10 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 func (navigator *ChromeNavigator) waitTotalLoad(url ...string) error {
 	response, err := navigator.waitPageResponse(url...)
 	if err != nil {
-		navigator.LastError = err
 		return err
 	}
 
 	if err := navigator.waitPageLoaded(); err != nil {
-		navigator.LastError = err
 		return err
 	}
 
