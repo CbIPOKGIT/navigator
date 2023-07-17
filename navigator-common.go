@@ -58,7 +58,7 @@ func (navigator *CommonNavigator) SetModel(model *Model) {
 
 func (navigator *CommonNavigator) GetCrawler() *goquery.Document {
 	if navigator.Crawler == nil {
-		navigator.Crawler, _ = goquery.NewDocumentFromReader(bytes.NewBuffer([]byte("")))
+		navigator.initEmptyCrawler()
 	}
 	return navigator.Crawler
 }
@@ -77,6 +77,11 @@ func (navigator *CommonNavigator) SetCaptchaSolver(solver CaptchaSolver) {
 
 func (navigator *CommonNavigator) SetProxyGetter(getter ProxyGetter) {
 	navigator.PrxGetter = getter
+}
+
+// Initialize empty crawler
+func (navigator *CommonNavigator) initEmptyCrawler() {
+	navigator.Crawler, _ = goquery.NewDocumentFromReader(bytes.NewBuffer([]byte("")))
 }
 
 // Writing initial data before navigate

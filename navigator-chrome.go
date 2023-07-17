@@ -59,6 +59,8 @@ func (navigator *ChromeNavigator) Navigate(url string) error {
 		return err
 	}
 
+	navigator.initEmptyCrawler()
+
 	return navigator.navigateUrl()
 }
 
@@ -107,14 +109,14 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			}
 		}
 
+		if navigator.Model.DelayBeforeRead > 0 {
+			time.Sleep(time.Second * time.Duration(navigator.Model.DelayBeforeRead))
+		}
+
 		html, err := navigator.Page.HTML()
 		if err != nil {
 			navigator.LastError = errors.New(fmt.Sprintf("Error read HTML from page: %s", err.Error()))
 			continue
-		}
-
-		if navigator.Model.DelayBeforeRead > 0 {
-			time.Sleep(time.Second * time.Duration(navigator.Model.DelayBeforeRead))
 		}
 
 		if navigator.JustCreated && navigator.Model.EmptyLoad && !reloading {
@@ -146,7 +148,7 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 	return navigator.LastError
 }
 
-// Wait for url response and sign page loaded
+// Wait navigation response and sign page loaded
 func (navigator *ChromeNavigator) waitTotalLoad(url ...string) error {
 	response, err := navigator.waitPageResponse(url...)
 	if err != nil {
@@ -162,7 +164,7 @@ func (navigator *ChromeNavigator) waitTotalLoad(url ...string) error {
 	return nil
 }
 
-// Wait for url response
+// Wait navigation response
 func (navigator *ChromeNavigator) waitPageResponse(url ...string) (*proto.NetworkResponseReceived, error) {
 	response := proto.NetworkResponseReceived{}
 	wait := navigator.Page.WaitEvent(&response)

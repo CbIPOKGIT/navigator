@@ -21,6 +21,8 @@ func (navigator *GentelmanNavigator) Navigate(url string) error {
 		return err
 	}
 
+	navigator.initEmptyCrawler()
+
 	return navigator.navigateUrl()
 }
 
