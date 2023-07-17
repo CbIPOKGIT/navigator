@@ -113,12 +113,6 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			time.Sleep(time.Second * time.Duration(navigator.Model.DelayBeforeRead))
 		}
 
-		html, err := navigator.Page.HTML()
-		if err != nil {
-			navigator.LastError = errors.New(fmt.Sprintf("Error read HTML from page: %s", err.Error()))
-			continue
-		}
-
 		if navigator.JustCreated && navigator.Model.EmptyLoad && !reloading {
 			i = -1
 			reloading = true
@@ -135,12 +129,18 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			continue
 		}
 
+		html, err := navigator.Page.HTML()
+		if err != nil {
+			navigator.LastError = errors.New(fmt.Sprintf("Error read HTML from page: %s", err.Error()))
+			continue
+		}
+
 		if err := navigator.createCrawlerFromHTML(html); err != nil {
 			navigator.LastError = errors.New(fmt.Sprintf("Error create crawler from HTML: %s", err.Error()))
 			continue
 		}
 
-		if navigator.isValidResponse(i) {
+		if navigator.isValidResponse(navigator.NavigateStatus) {
 			break
 		}
 	}
