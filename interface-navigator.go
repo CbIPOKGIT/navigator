@@ -12,6 +12,14 @@ type Navigator interface {
 	// Взяти DOM дерево після навігації
 	GetCrawler() *goquery.Document
 
+	// Поточний URL в роботі
+	GetUrl() string
+
+	// Фактичний URL але вже в роботі.
+	//
+	// Актуально для CHROME, щоб зрозуміти можливо був редірект
+	GetActualUrl() string
+
 	// Статус код навігації
 	GetNavigateStatus() int
 

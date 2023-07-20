@@ -75,6 +75,17 @@ func (navigator *ChromeNavigator) Evaluate(script string, args ...string) (strin
 	return result.Value.Str(), nil
 }
 
+func (navigator *ChromeNavigator) GetActualUrl() string {
+	if navigator.Page == nil {
+		return navigator.Url
+	}
+	info, err := navigator.Page.Info()
+	if err != nil {
+		return navigator.Url
+	}
+	return info.URL
+}
+
 func (navigator *ChromeNavigator) navigateUrl() error {
 	if navigator.Model.ClosePageEverytime && navigator.Page != nil {
 		navigator.Page.Close()

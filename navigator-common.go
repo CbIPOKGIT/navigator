@@ -79,6 +79,14 @@ func (navigator *CommonNavigator) SetProxyGetter(getter ProxyGetter) {
 	navigator.PrxGetter = getter
 }
 
+func (navigator *CommonNavigator) GetUrl() string {
+	return navigator.Url
+}
+
+func (navigator *CommonNavigator) GetActualUrl() string {
+	return navigator.Url
+}
+
 // Initialize empty crawler
 func (navigator *CommonNavigator) initEmptyCrawler() {
 	navigator.Crawler, _ = goquery.NewDocumentFromReader(bytes.NewBuffer([]byte("")))
