@@ -47,7 +47,7 @@ func (navigator *ChromeNavigator) closePage() error {
 func (navigator *ChromeNavigator) closeBrowser() error {
 	var err error
 	if navigator.Browser != nil && !navigator.Model.UseSystemChrome {
-		err = navigator.Close()
+		err = navigator.Browser.Close()
 		navigator.Browser = nil
 	}
 	return err
@@ -84,13 +84,13 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 
 	for i := 0; i < navigator.calculateTriesCount(); i++ {
 		if i > 0 {
-			reloading = false
 			navigator.Close()
 		} else {
 			if !navigator.JustCreated && navigator.Model.DelayBeforeNavigate > 0 {
 				time.Sleep(time.Second * time.Duration(navigator.Model.DelayBeforeNavigate))
 			}
 		}
+		reloading = false
 
 		if err := navigator.createClientIfNeed(); err != nil {
 			navigator.LastError = err
@@ -360,13 +360,13 @@ func (navigator *ChromeNavigator) solveCaptcha() error {
 		return nil
 	}
 
-	navigator.CptchSolver.SetPage(navigator.Page)
+	navigator.CptchSolver.SetNavigator(navigator)
 	solved, err := navigator.CptchSolver.Solve()
 	if err != nil {
 		return err
 	}
 	if !solved {
-		return errors.New("Unable to solve captcha")
+		return errors.New("Cannot solve captcha")
 	}
 	return nil
 }
