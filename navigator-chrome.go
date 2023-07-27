@@ -3,6 +3,7 @@ package navigator
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sync/atomic"
 	"time"
 
@@ -108,7 +109,7 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			break
 		}
 
-		if err := navigator.waitTotalLoad(navigator.Url); err != nil {
+		if err := navigator.WaitTotalLoad(navigator.Url); err != nil {
 			navigator.LastError = err
 			continue
 		}
@@ -160,13 +161,9 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 }
 
 // Wait navigation response and sign page loaded
-func (navigator *ChromeNavigator) waitTotalLoad(url ...string) error {
-	response, err := navigator.waitPageResponse(url...)
+func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
+	response, err := navigator.waitResponseAndLoad(url...)
 	if err != nil {
-		return err
-	}
-
-	if err := navigator.waitPageLoaded(); err != nil {
 		return err
 	}
 
@@ -175,45 +172,36 @@ func (navigator *ChromeNavigator) waitTotalLoad(url ...string) error {
 	return nil
 }
 
-// Wait navigation response
-func (navigator *ChromeNavigator) waitPageResponse(url ...string) (*proto.NetworkResponseReceived, error) {
+func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.NetworkResponseReceived, error) {
+	// Статус відповіді на запит
 	response := proto.NetworkResponseReceived{}
-	wait := navigator.Page.WaitEvent(&response)
 
-	channelSuccess := make(chan interface{})
+	// Функція, що спрацює лише коли отримаємо відповідь на запит
+	waitResponse := navigator.Page.WaitEvent(&response)
+
+	// Таймаут очікування відповіді
+	timeoutResponse := time.NewTimer(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
+
+	// Канал сигналізації, що відповідь від сервера отримана
+	responseRecived := make(chan any, 1)
+
+	// Таймаут завантаження сторінки.
+	// Запускається лише після того як отримана відповідь від сервера
+	timeoutload := time.NewTimer(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
+	timeoutload.Stop()
+
+	// Канал сигналізації, що сторінка завантажена
+	waitLoad := make(chan error)
+
 	go func() {
-		wait()
-		channelSuccess <- nil
+		waitResponse()
+		responseRecived <- nil
+		// log.Println("Response recived")
+		timeoutload.Reset(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
 	}()
 
-	timeout := time.NewTimer(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
-
-	if len(url) > 0 {
-		if err := navigator.Page.Navigate(url[0]); err != nil {
-			return nil, err
-		}
-	}
-
-	select {
-	case <-channelSuccess:
-		return &response, nil
-	case <-timeout.C:
-		return nil, errors.New("Timeout navigation")
-	}
-}
-
-// Wait for page loaded
-func (navigator *ChromeNavigator) waitPageLoaded() error {
-	timeout := time.NewTimer(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
-
-	waitChan := make(chan error)
-
-	if navigator.Model.NavigationSelector != "" {
-		go func() {
-			waitChan <- navigator.Page.WaitElementsMoreThan(navigator.Model.NavigationSelector, 1)
-		}()
-	} else {
-		var eventName = proto.PageLifecycleEventNameDOMContentLoaded
+	if navigator.Model.NavigationSelector == "" {
+		var eventName proto.PageLifecycleEventName
 
 		switch navigator.Model.NavigationWaitfor {
 		case 1:
@@ -222,21 +210,46 @@ func (navigator *ChromeNavigator) waitPageLoaded() error {
 			eventName = proto.PageLifecycleEventNameNetworkIdle
 		case 3:
 			eventName = proto.PageLifecycleEventNameLoad
+		default:
+			eventName = proto.PageLifecycleEventNameDOMContentLoaded
 		}
 
-		wait := navigator.Page.WaitNavigation(eventName)
-
+		waitEventLoad := navigator.Page.WaitNavigation(eventName)
 		go func() {
-			wait()
-			waitChan <- nil
+			waitEventLoad()
+
+			// Якщо так сталось, що подія завантаження сторінки сталася раніше
+			// ніж оброблений статус навігації
+			// тоді чекаємо доки обробиться статус навігації
+			<-responseRecived
+			// log.Println("Page loaded")
+
+			// Сигналізуємо, що сторінка завантажилась
+			waitLoad <- nil
+		}()
+	}
+
+	if len(url) > 0 {
+		if err := navigator.Page.Navigate(url[0]); err != nil {
+			return nil, err
+		}
+	}
+
+	if navigator.Model.NavigationSelector != "" {
+		go func() {
+			waitLoad <- navigator.Page.WaitElementsMoreThan(navigator.Model.NavigationSelector, 1)
 		}()
 	}
 
 	select {
-	case err := <-waitChan:
-		return err
-	case <-timeout.C:
-		return errors.New("Timeout navigation")
+	case err := <-waitLoad:
+		return &response, err
+	case <-timeoutResponse.C:
+		log.Println("Timeout response")
+		return nil, errors.New("Timeout response")
+	case <-timeoutload.C:
+		log.Println("Timeout navigation")
+		return nil, errors.New("Timeout navigation")
 	}
 }
 
@@ -336,7 +349,7 @@ func (navigator *ChromeNavigator) beatChallange() error {
 				return
 			}
 
-			if err := navigator.waitTotalLoad(); err != nil {
+			if err := navigator.WaitTotalLoad(); err != nil {
 				successChannel <- err
 				return
 			}
@@ -361,13 +374,12 @@ func (navigator *ChromeNavigator) solveCaptcha() error {
 		return nil
 	}
 
-	elements, err := navigator.Page.Elements(navigator.Model.CaptchaSelector)
+	has, _, err := navigator.Page.Has(navigator.Model.CaptchaSelector)
 	if err != nil {
 		return err
 	}
 
-	hasCaptcha := elements.Empty() == navigator.Model.CaptchaSelectorInverted
-	if !hasCaptcha {
+	if has == navigator.Model.CaptchaSelectorInverted {
 		return nil
 	}
 
@@ -394,7 +406,7 @@ func (navigator *ChromeNavigator) executePreScript() error {
 	}
 
 	if navigator.Model.PreScriptNeedReload {
-		err = navigator.waitTotalLoad()
+		err = navigator.WaitTotalLoad()
 	}
 
 	return err

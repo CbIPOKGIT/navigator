@@ -1,6 +1,6 @@
 module navigator
 
-go 1.17
+go 1.20
 
 require (
 	github.com/PuerkitoBio/goquery v1.8.0
