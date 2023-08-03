@@ -196,25 +196,12 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 	go func() {
 		waitResponse()
 		responseRecived <- nil
-		// log.Println("Response recived")
 		timeoutload.Reset(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
 	}()
 
 	if navigator.Model.NavigationSelector == "" {
-		var eventName proto.PageLifecycleEventName
+		waitEventLoad := navigator.Page.WaitNavigation(navigator.getPageLoadEvent())
 
-		switch navigator.Model.NavigationWaitfor {
-		case 1:
-			eventName = proto.PageLifecycleEventNameNetworkAlmostIdle
-		case 2:
-			eventName = proto.PageLifecycleEventNameNetworkIdle
-		case 3:
-			eventName = proto.PageLifecycleEventNameLoad
-		default:
-			eventName = proto.PageLifecycleEventNameDOMContentLoaded
-		}
-
-		waitEventLoad := navigator.Page.WaitNavigation(eventName)
 		go func() {
 			waitEventLoad()
 
@@ -227,18 +214,17 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 			// Сигналізуємо, що сторінка завантажилась
 			waitLoad <- nil
 		}()
-	}
-
-	if len(url) > 0 {
-		if err := navigator.Page.Navigate(url[0]); err != nil {
-			return nil, err
-		}
-	}
-
-	if navigator.Model.NavigationSelector != "" {
+	} else {
 		go func() {
 			waitLoad <- navigator.Page.WaitElementsMoreThan(navigator.Model.NavigationSelector, 1)
 		}()
+	}
+
+	if len(url) > 0 {
+		time.Sleep(time.Millisecond * 10)
+		if err := navigator.Page.Navigate(url[0]); err != nil {
+			return nil, err
+		}
 	}
 
 	select {
@@ -259,6 +245,20 @@ func (navigator *ChromeNavigator) getPageLoadTimeout() int {
 		return navigator.Model.NavigationTimeout
 	} else {
 		return DEFAULT_BROWSER_NAVIGATION_TIMEOUT
+	}
+}
+
+// Get load event name
+func (navigator *ChromeNavigator) getPageLoadEvent() proto.PageLifecycleEventName {
+	switch navigator.Model.NavigationWaitfor {
+	case 1:
+		return proto.PageLifecycleEventNameNetworkAlmostIdle
+	case 2:
+		return proto.PageLifecycleEventNameNetworkIdle
+	case 3:
+		return proto.PageLifecycleEventNameLoad
+	default:
+		return proto.PageLifecycleEventNameDOMContentLoaded
 	}
 }
 
