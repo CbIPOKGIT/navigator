@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -141,14 +142,8 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			continue
 		}
 
-		html, err := navigator.Page.HTML()
-		if err != nil {
-			navigator.LastError = errors.New(fmt.Sprintf("Error read HTML from page: %s", err.Error()))
-			continue
-		}
-
-		if err := navigator.createCrawlerFromHTML(html); err != nil {
-			navigator.LastError = errors.New(fmt.Sprintf("Error create crawler from HTML: %s", err.Error()))
+		if err := navigator.waitCreateCrawler(); err != nil {
+			navigator.LastError = err
 			continue
 		}
 
@@ -195,6 +190,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 
 	go func() {
 		waitResponse()
+		// log.Println("Response recived")
 		responseRecived <- nil
 		timeoutload.Reset(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
 	}()
@@ -204,6 +200,8 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 
 		go func() {
 			waitEventLoad()
+			navigator.Page.WaitLoad()
+			// log.Println("Loaded")
 
 			// Якщо так сталось, що подія завантаження сторінки сталася раніше
 			// ніж оброблений статус навігації
@@ -229,6 +227,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 
 	select {
 	case err := <-waitLoad:
+		// log.Println("Navigated")
 		return &response, err
 	case <-timeoutResponse.C:
 		log.Println("Timeout response")
@@ -260,6 +259,27 @@ func (navigator *ChromeNavigator) getPageLoadEvent() proto.PageLifecycleEventNam
 	default:
 		return proto.PageLifecycleEventNameDOMContentLoaded
 	}
+}
+
+func (navigator *ChromeNavigator) waitCreateCrawler() error {
+	for i := 0; i < 2; i++ {
+		html, err := navigator.Page.HTML()
+		if err != nil {
+			return err
+		}
+
+		if err := navigator.createCrawlerFromHTML(html); err != nil {
+			return errors.New(fmt.Sprintf("Error create crawler from HTML: %s", err.Error()))
+		}
+
+		if strings.TrimSpace(navigator.Crawler.Find("body").Text()) == "" {
+			log.Println("Waiting DOM document loaded")
+			time.Sleep(time.Millisecond * 500)
+			continue
+		}
+	}
+
+	return nil
 }
 
 // If page is nil - create new page
