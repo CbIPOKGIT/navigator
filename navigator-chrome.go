@@ -27,18 +27,17 @@ type ChromeNavigator struct {
 
 // Interface implementation
 func (navigator *ChromeNavigator) Close() error {
-	var errPage, errBrowser error = navigator.closePage(), navigator.closeBrowser()
-	if errPage != nil {
-		return errPage
+	if err := navigator.closePage(); err != nil {
+		return err
 	}
-	if errBrowser != nil {
-		return errBrowser
+	if err := navigator.closeBrowser(); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (navigator *ChromeNavigator) closePage() error {
-	var err error
+	var err error = nil
 	if navigator.Page != nil {
 		err = navigator.Page.Close()
 		navigator.Page = nil
@@ -47,7 +46,7 @@ func (navigator *ChromeNavigator) closePage() error {
 }
 
 func (navigator *ChromeNavigator) closeBrowser() error {
-	var err error
+	var err error = nil
 	if navigator.Browser != nil && !navigator.Model.UseSystemChrome {
 		err = navigator.Browser.Close()
 		navigator.Browser = nil
@@ -200,7 +199,6 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 
 		go func() {
 			waitEventLoad()
-			navigator.Page.WaitLoad()
 			// log.Println("Loaded")
 
 			// Якщо так сталось, що подія завантаження сторінки сталася раніше
