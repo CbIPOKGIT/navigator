@@ -40,8 +40,8 @@ func (navigator *ChromeNavigator) closePage() error {
 	var err error = nil
 	if navigator.Page != nil && navigator.Model.UseSystemChrome {
 		err = navigator.Page.Close()
-		navigator.Page = nil
 	}
+	navigator.Page = nil
 	return err
 }
 
@@ -49,8 +49,8 @@ func (navigator *ChromeNavigator) closeBrowser() error {
 	var err error = nil
 	if navigator.Browser != nil && !navigator.Model.UseSystemChrome {
 		err = navigator.Browser.Close()
-		navigator.Browser = nil
 	}
+	navigator.Browser = nil
 	return err
 }
 
