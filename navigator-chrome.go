@@ -1,6 +1,7 @@
 package navigator
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -199,7 +200,6 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 
 		go func() {
 			waitEventLoad()
-			// log.Println("Loaded")
 
 			// Якщо так сталось, що подія завантаження сторінки сталася раніше
 			// ніж оброблений статус навігації
@@ -382,8 +382,33 @@ func (navigator *ChromeNavigator) beatChallange() error {
 		return err
 	case <-timer.C:
 		stopReloading.Store(true)
+		// return navigator.confirmNotARobot()
 		return errors.New("Unable pass challange form")
 	}
+}
+
+// Try click I'm not robot
+func (navigator *ChromeNavigator) confirmNotARobot() error {
+	iframe, err := navigator.Page.Element("iframe")
+	if err != nil || iframe == nil {
+		return errors.New("Unable pass challange form")
+	}
+
+	if _, err = iframe.Frame(); err != nil {
+		return errors.New("Unable pass challange form")
+	}
+
+	resp := navigator.Page.MustEval("() => JSON.stringify(document.querySelector('iframe').getBoundingClientRect())")
+	coords := make(map[string]float64, 4)
+
+	if err := json.Unmarshal([]byte(resp.Str()), &coords); err != nil {
+		return errors.New("Unable pass challange form")
+	}
+
+	navigator.Page.Mouse.Move(coords["x"]+20, coords["y"]+20, 10)
+	navigator.Page.Mouse.Click(proto.InputMouseButtonLeft)
+
+	return navigator.WaitTotalLoad()
 }
 
 // Solve captcha if presented
