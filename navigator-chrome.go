@@ -168,53 +168,38 @@ func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
 }
 
 func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.NetworkResponseReceived, error) {
-	// Статус відповіді на запит
-	response := proto.NetworkResponseReceived{}
+	response := &proto.NetworkResponseReceived{}
 
-	// Функція, що спрацює лише коли отримаємо відповідь на запит
-	waitResponse := navigator.Page.WaitEvent(&response)
+	var responseRecived, pageLoaded bool
 
-	// Таймаут очікування відповіді
-	timeoutResponse := time.NewTimer(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
+	rr, pl := make(chan any), make(chan any)
+	checksuccess := make(chan any, 1)
 
-	// Канал сигналізації, що відповідь від сервера отримана
-	responseRecived := make(chan any, 1)
+	waitresponse := navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
+		if e.Type == proto.NetworkResourceTypeDocument {
+			response = e
+			rr <- nil
+			return true
+		} else {
+			return false
+		}
+	})
 
-	// Таймаут завантаження сторінки.
-	// Запускається лише після того як отримана відповідь від сервера
-	timeoutload := time.NewTimer(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
-	timeoutload.Stop()
+	// waitresponse := navigator.Page.WaitEvent(response)
 
-	// Канал сигналізації, що сторінка завантажена
-	waitLoad := make(chan error)
+	// waitnavigation := navigator.Page.
+	// 	Timeout(navigator.getPageLoadTimeout()).
+	// 	WaitNavigation(navigator.getPageLoadEvent())
 
-	go func() {
-		waitResponse()
-		// log.Println("Response recived")
-		responseRecived <- nil
-		timeoutload.Reset(time.Duration(navigator.getPageLoadTimeout()) * time.Second)
-	}()
+	waitnavigation := navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
+		pl <- nil
+		return false
+	})
 
-	if navigator.Model.NavigationSelector == "" {
-		waitEventLoad := navigator.Page.WaitNavigation(navigator.getPageLoadEvent())
+	go waitresponse()
+	go waitnavigation()
 
-		go func() {
-			waitEventLoad()
-
-			// Якщо так сталось, що подія завантаження сторінки сталася раніше
-			// ніж оброблений статус навігації
-			// тоді чекаємо доки обробиться статус навігації
-			<-responseRecived
-			// log.Println("Page loaded")
-
-			// Сигналізуємо, що сторінка завантажилась
-			waitLoad <- nil
-		}()
-	} else {
-		go func() {
-			waitLoad <- navigator.Page.WaitElementsMoreThan(navigator.Model.NavigationSelector, 1)
-		}()
-	}
+	timer := time.NewTimer(time.Second * 30)
 
 	if len(url) > 0 {
 		time.Sleep(time.Millisecond * 10)
@@ -223,25 +208,43 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 		}
 	}
 
-	select {
-	case err := <-waitLoad:
-		// log.Println("Navigated")
-		return &response, err
-	case <-timeoutResponse.C:
-		log.Println("Timeout response")
-		return nil, errors.New("Timeout response")
-	case <-timeoutload.C:
-		log.Println("Timeout navigation")
-		return nil, errors.New("Timeout navigation")
+	for {
+		select {
+
+		// Response recived
+		case <-rr:
+			responseRecived = true
+			checksuccess <- nil
+			timer.Stop()
+			timer.Reset(time.Second * 10)
+
+		// Page loaded
+		case <-pl:
+			pageLoaded = true
+			checksuccess <- nil
+
+		// Checking status
+		case <-checksuccess:
+			if pageLoaded && responseRecived {
+				return response, nil
+			}
+
+		case <-timer.C:
+			if !responseRecived {
+				// log.Println("Timeout response")
+				return nil, errors.New("Timeout response")
+			}
+			return response, nil
+		}
 	}
 }
 
 // Get page loading timeout
-func (navigator *ChromeNavigator) getPageLoadTimeout() int {
+func (navigator *ChromeNavigator) getPageLoadTimeout() time.Duration {
 	if navigator.Model.NavigationTimeout > 0 {
-		return navigator.Model.NavigationTimeout
+		return time.Duration(navigator.Model.NavigationTimeout) * time.Second
 	} else {
-		return DEFAULT_BROWSER_NAVIGATION_TIMEOUT
+		return time.Duration(DEFAULT_BROWSER_NAVIGATION_TIMEOUT) * time.Second
 	}
 }
 
@@ -382,8 +385,8 @@ func (navigator *ChromeNavigator) beatChallange() error {
 		return err
 	case <-timer.C:
 		stopReloading.Store(true)
-		// return navigator.confirmNotARobot()
-		return errors.New("Unable pass challange form")
+		return navigator.confirmNotARobot()
+		// return errors.New("Unable pass challange form")
 	}
 }
 
