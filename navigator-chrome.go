@@ -408,8 +408,8 @@ func (navigator *ChromeNavigator) confirmNotARobot() error {
 		return errors.New("Unable pass challange form")
 	}
 
-	navigator.Page.Mouse.Move(coords["x"]+20, coords["y"]+20, 10)
-	navigator.Page.Mouse.Click(proto.InputMouseButtonLeft)
+	navigator.Page.Mouse.MoveLinear(proto.Point{X: coords["x"] + 20, Y: coords["y"] + 20}, 10)
+	navigator.Page.Mouse.MustClick(proto.InputMouseButtonLeft)
 
 	return navigator.WaitTotalLoad()
 }
