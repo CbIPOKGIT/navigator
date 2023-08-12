@@ -173,7 +173,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 	var responseRecived, pageLoaded bool
 
 	rr, pl := make(chan any), make(chan any)
-	checksuccess := make(chan any, 1)
+	checksuccess := make(chan any, 2)
 
 	waitresponse := navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
 		if e.Type == proto.NetworkResourceTypeDocument {
@@ -185,13 +185,8 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 		}
 	})
 
-	// waitresponse := navigator.Page.WaitEvent(response)
-
-	// waitnavigation := navigator.Page.
-	// 	Timeout(navigator.getPageLoadTimeout()).
-	// 	WaitNavigation(navigator.getPageLoadEvent())
-
 	waitnavigation := navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
+		time.Sleep(time.Millisecond * 100)
 		pl <- nil
 		return false
 	})
