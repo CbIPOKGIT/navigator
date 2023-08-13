@@ -1,4 +1,4 @@
-module navigator
+module github.com/CbIPOKGIT/navigator
 
 go 1.20
 
