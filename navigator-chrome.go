@@ -354,13 +354,13 @@ func (navigator *ChromeNavigator) beatChallange() error {
 				return
 			}
 
-			elements, err := navigator.Page.Elements(navigator.Model.ChallangeSelector)
+			haschalleng, err := navigator.hasChallange()
 			if err != nil {
 				successChannel <- err
 				return
 			}
 
-			if elements.Empty() {
+			if !haschalleng {
 				successChannel <- nil
 				return
 			}
@@ -387,27 +387,54 @@ func (navigator *ChromeNavigator) beatChallange() error {
 
 // Try click I'm not robot
 func (navigator *ChromeNavigator) confirmNotARobot() error {
-	iframe, err := navigator.Page.Element("iframe")
-	if err != nil || iframe == nil {
-		return errors.New("Unable pass challange form")
+	errorUnablePassChallange := errors.New("Unable pass challange form")
+
+	// Кількість спроб - 3
+	for i := 0; i < 3; i++ {
+		haschallenge, err := navigator.hasChallange()
+		if err != nil {
+			return err
+		}
+
+		if !haschallenge {
+			return nil
+		}
+
+		time.Sleep(time.Second * 5)
+
+		iframe, err := navigator.Page.Element("iframe")
+		if err != nil || iframe == nil {
+			return errorUnablePassChallange
+		}
+
+		if _, err = iframe.Frame(); err != nil {
+			return errorUnablePassChallange
+		}
+
+		resp := navigator.Page.MustEval("() => JSON.stringify(document.querySelector('iframe').getBoundingClientRect())")
+		coords := make(map[string]float64, 4)
+
+		if err := json.Unmarshal([]byte(resp.Str()), &coords); err != nil {
+			return errorUnablePassChallange
+		}
+
+		navigator.Page.Activate()
+		time.Sleep(time.Millisecond * 500)
+
+		navigator.Page.Mouse.MoveLinear(proto.Point{X: coords["x"] + 20, Y: coords["y"] + 20}, 10)
+		time.Sleep(time.Millisecond * 500)
+
+		navigator.Page.Mouse.MustClick(proto.InputMouseButtonLeft)
+
+		navigator.WaitTotalLoad()
 	}
 
-	if _, err = iframe.Frame(); err != nil {
-		return errors.New("Unable pass challange form")
-	}
+	return errorUnablePassChallange
+}
 
-	resp := navigator.Page.MustEval("() => JSON.stringify(document.querySelector('iframe').getBoundingClientRect())")
-	coords := make(map[string]float64, 4)
-
-	if err := json.Unmarshal([]byte(resp.Str()), &coords); err != nil {
-		return errors.New("Unable pass challange form")
-	}
-
-	navigator.Page.Mouse.MoveLinear(proto.Point{X: coords["x"] + 20, Y: coords["y"] + 20}, 10)
-	navigator.Page.Mouse.MustClick(proto.InputMouseButtonLeft)
-	navigator.Page.Activate()
-
-	return navigator.WaitTotalLoad()
+func (navigator *ChromeNavigator) hasChallange() (bool, error) {
+	has, _, err := navigator.Page.Has(navigator.Model.ChallangeSelector)
+	return has, err
 }
 
 // Solve captcha if presented
