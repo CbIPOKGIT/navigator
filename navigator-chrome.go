@@ -293,7 +293,8 @@ func (navigator *ChromeNavigator) createClientIfNeed() error {
 		}
 	}
 
-	navigator.Page = navigator.Browser.MustPage()
+	navigator.createPage()
+
 	navigator.JustCreated = true
 
 	return nil
@@ -334,6 +335,14 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	}
 
 	return rod.New().ControlURL(u).MustConnect().NoDefaultDevice(), nil
+}
+
+func (navigator *ChromeNavigator) createPage() {
+	navigator.Page = navigator.Browser.MustPage()
+
+	navigator.Page.EvalOnNewDocument(`() => {
+		window.alert = (message) => console.log(message)
+	}`)
 }
 
 // Beat the challange. Its something like Cloudflare protection.
