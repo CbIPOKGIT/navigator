@@ -175,24 +175,26 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 	rr, pl := make(chan any), make(chan any)
 	checksuccess := make(chan any, 2)
 
-	waitresponse := navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
-		if e.Type == proto.NetworkResourceTypeDocument {
-			response = e
-			rr <- nil
-			return true
-		} else {
+	go func() {
+		waitresponse := navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
+			if e.Type == proto.NetworkResourceTypeDocument {
+				response = e
+				rr <- nil
+				return true
+			} else {
+				return false
+			}
+		})
+
+		waitnavigation := navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
+			time.Sleep(time.Millisecond * 100)
+			pl <- nil
 			return false
-		}
-	})
+		})
 
-	waitnavigation := navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
-		time.Sleep(time.Millisecond * 100)
-		pl <- nil
-		return false
-	})
-
-	go waitresponse()
-	go waitnavigation()
+		go waitresponse()
+		go waitnavigation()
+	}()
 
 	timer := time.NewTimer(time.Second * 30)
 
@@ -340,9 +342,7 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 func (navigator *ChromeNavigator) createPage() {
 	navigator.Page = navigator.Browser.MustPage()
 
-	navigator.Page.EvalOnNewDocument(`() => {
-		window.alert = (message) => console.log(message)
-	}`)
+	navigator.Page.MustEvalOnNewDocument(`window.alert = (message) => console.log(message)`)
 }
 
 // Beat the challange. Its something like Cloudflare protection.
@@ -452,7 +452,7 @@ func (navigator *ChromeNavigator) solveCaptcha() error {
 		return nil
 	}
 
-	has, _, err := navigator.Page.Has(navigator.Model.CaptchaSelector)
+	has, _, err := navigator.Page.Timeout(time.Second * 5).Has(navigator.Model.CaptchaSelector)
 	if err != nil {
 		return err
 	}
