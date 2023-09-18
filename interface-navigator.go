@@ -36,7 +36,7 @@ type Navigator interface {
 	SetProxyGetter(ProxyGetter)
 
 	// Форматуємо лінк відносно поточного домену
-	// FormatUrl(string) string
+	FormatUrl(string) string
 
 	// Записуємо необхідні куки
 	// name, value, maxage стандартні поля для http.Cookie{}

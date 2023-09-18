@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -24,6 +25,9 @@ type CommonNavigator struct {
 
 	// Current domen
 	Domen string
+
+	// Current protocol (HTTP, HTTPS)
+	Protocol string
 
 	// Last navigate status
 	NavigateStatus int
@@ -87,6 +91,29 @@ func (navigator *CommonNavigator) GetActualUrl() string {
 	return navigator.Url
 }
 
+// Метод інтерфейсу. Форматуємо лінк відносно поточного домену
+func (navigator *CommonNavigator) FormatUrl(href string) string {
+	if regexp.MustCompile(`(?mi)^http`).MatchString(href) {
+		return href
+	}
+
+	if regexp.MustCompile(`(?mi)^\?`).MatchString(href) {
+		currentUrlWithoutQuery := regexp.MustCompile(`(?mi)\?.*`).ReplaceAllString(navigator.Url, "")
+		return currentUrlWithoutQuery + href
+	}
+
+	protocol := navigator.Protocol
+	if protocol == "" {
+		protocol = "http"
+	}
+
+	if regexp.MustCompile(`(?mi)^/`).MatchString(href) {
+		return fmt.Sprintf("%s://%s%s", navigator.Protocol, navigator.Domen, href)
+	} else {
+		return fmt.Sprintf("%s://%s/%s", navigator.Protocol, navigator.Domen, href)
+	}
+}
+
 // Initialize empty crawler
 func (navigator *CommonNavigator) initEmptyCrawler() {
 	navigator.Crawler, _ = goquery.NewDocumentFromReader(bytes.NewBuffer([]byte("")))
@@ -94,23 +121,11 @@ func (navigator *CommonNavigator) initEmptyCrawler() {
 
 // Writing initial data before navigate
 func (navigator *CommonNavigator) writeAndFormatURL(url string) error {
-	if err := navigator.formatUrl(url); err != nil {
-		navigator.LastError = err
-		return err
-	}
-	navigator.extractDomenName()
-	return nil
-}
+	navigator.Url = navigator.FormatUrl(url)
 
-// Format url
-func (navigator *CommonNavigator) formatUrl(url string) error {
-	if url == "" {
-		return errors.New("empty_url")
-	}
-	if !matchUrlHttp.MatchString(url) {
-		url = "http://" + url
-	}
-	navigator.Url = url
+	navigator.extractDomenName()
+	navigator.extractProtocol()
+
 	return nil
 }
 
@@ -118,6 +133,15 @@ func (navigator *CommonNavigator) formatUrl(url string) error {
 func (navigator *CommonNavigator) extractDomenName() {
 	navigator.Domen = matchUrlHttp.ReplaceAllString(navigator.Url, "")
 	navigator.Domen = matchUrlFromSlash.ReplaceAllString(navigator.Domen, "")
+}
+
+// Extract protocol type from url
+func (navigator *CommonNavigator) extractProtocol() {
+	if protocol := regexp.MustCompile(`(?mi)^https?`).FindString(navigator.Url); protocol != "" {
+		navigator.Protocol = strings.ToLower(protocol)
+	} else {
+		navigator.Protocol = "http"
+	}
 }
 
 // Calculate how many tries we can navigate
