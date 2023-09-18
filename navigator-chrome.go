@@ -142,7 +142,7 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			continue
 		}
 
-		if err := navigator.waitCreateCrawler(); err != nil {
+		if err := navigator.WaitCreateCrawler(); err != nil {
 			navigator.LastError = err
 			continue
 		}
@@ -259,7 +259,7 @@ func (navigator *ChromeNavigator) getPageLoadEvent() proto.PageLifecycleEventNam
 	}
 }
 
-func (navigator *ChromeNavigator) waitCreateCrawler() error {
+func (navigator *ChromeNavigator) WaitCreateCrawler() error {
 	for i := 0; i < 2; i++ {
 		html, err := navigator.Page.HTML()
 		if err != nil {
