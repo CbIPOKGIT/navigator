@@ -34,6 +34,7 @@ func (navigator *ChromeNavigator) Close() error {
 	if err := navigator.closeBrowser(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -172,11 +173,11 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 
 	var responseRecived, pageLoaded bool
 
-	rr, pl := make(chan any), make(chan any)
+	rr, pl := make(chan any, 1), make(chan any, 1)
 	checksuccess := make(chan any, 2)
 
 	go func() {
-		waitresponse := navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
+		go navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
 			if e.Type == proto.NetworkResourceTypeDocument {
 				response = e
 				rr <- nil
@@ -184,16 +185,21 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 			} else {
 				return false
 			}
-		})
+		})()
 
-		waitnavigation := navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
-			time.Sleep(time.Millisecond * 100)
-			pl <- nil
-			return false
-		})
+		if navigator.Model.NavigationSelector == "" {
+			// Навігація
+			go navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
+				time.Sleep(time.Millisecond * 100)
+				pl <- nil
+				return false
+			})()
+		} else {
+			go func() {
+				pl <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
+			}()
+		}
 
-		go waitresponse()
-		go waitnavigation()
 	}()
 
 	timer := time.NewTimer(time.Second * 30)
