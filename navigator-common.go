@@ -2,7 +2,6 @@ package navigator
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -184,25 +183,4 @@ func (navigator *CommonNavigator) createCrawlerFromHTML(html string) error {
 // Valid repsponses 200 and 404
 func (navigator *CommonNavigator) isValidResponse(code int) bool {
 	return code == 200 || code == 404
-}
-
-// Returns signal if status OK or not.
-//
-// tryIndex - number of navigation tries. If count == max tries count - set not mo tries
-func (navigator *CommonNavigator) checkNavigateStatus(tryIndex int) bool {
-	if navigator.isValidResponse(navigator.NavigateStatus) {
-		if navigator.NavigateStatus == 200 {
-			navigator.LastError = nil
-		} else {
-			navigator.LastError = errors.New(fmt.Sprintf("Error %d", navigator.NavigateStatus))
-		}
-		return true
-	}
-
-	navigator.LastError = errors.New(fmt.Sprintf("Error %d", navigator.NavigateStatus))
-
-	if tryIndex == navigator.calculateTriesCount()-1 {
-		navigator.NoMoreTry = true
-	}
-	return false
 }
