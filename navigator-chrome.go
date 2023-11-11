@@ -94,9 +94,9 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 		navigator.Page.Close()
 	}
 
-	var reloading bool = false
+	var i int
 
-	for i := 0; i < navigator.calculateTriesCount(); i++ {
+	for i = 0; i < navigator.calculateTriesCount(); i++ {
 		if i > 0 {
 			navigator.Close()
 		} else {
@@ -104,7 +104,6 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 				time.Sleep(time.Second * time.Duration(navigator.Model.DelayBeforeNavigate))
 			}
 		}
-		reloading = false
 
 		if err := navigator.createClientIfNeed(); err != nil {
 			navigator.LastError = err
@@ -127,9 +126,8 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			time.Sleep(time.Second * time.Duration(navigator.Model.DelayBeforeRead))
 		}
 
-		if navigator.JustCreated && navigator.Model.EmptyLoad && !reloading {
+		if navigator.JustCreated && navigator.Model.EmptyLoad {
 			i = -1
-			reloading = true
 			continue
 		}
 
@@ -151,6 +149,10 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 		if navigator.isValidResponse(navigator.NavigateStatus) {
 			break
 		}
+	}
+
+	if i == navigator.calculateTriesCount() && navigator.PrxGetter != nil {
+		navigator.PrxGetter = nil
 	}
 
 	return navigator.LastError
@@ -328,7 +330,7 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 			Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome).
 			Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
 
-		if len(navigator.Model.BanSettings) > 0 && navigator.PrxGetter != nil {
+		if navigator.PrxGetter != nil {
 			proxyvalue, err := navigator.PrxGetter.GetProxy()
 			if err == nil {
 				l.Proxy(proxyvalue)

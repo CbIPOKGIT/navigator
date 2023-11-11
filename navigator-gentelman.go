@@ -3,6 +3,7 @@ package navigator
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -32,7 +33,9 @@ func (navigator *GentelmanNavigator) Close() error {
 }
 
 func (navigator *GentelmanNavigator) navigateUrl() error {
-	for i := 0; i < navigator.calculateTriesCount(); i++ {
+	var i int
+
+	for i = 0; i < navigator.calculateTriesCount(); i++ {
 		if i > 0 {
 			navigator.destoyClient()
 		}
@@ -51,7 +54,8 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 
 		response, err := request.Send()
 		if err != nil {
-			navigator.LastError = err
+			log.Println(err)
+			navigator.LastError = errors.New("Error navigate")
 			continue
 		}
 
@@ -62,9 +66,13 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 			continue
 		}
 
-		if navigator.isValidResponse(i) {
+		if navigator.isValidResponse(navigator.NavigateStatus) {
 			break
 		}
+	}
+
+	if i == navigator.calculateTriesCount() && navigator.PrxGetter != nil {
+		navigator.PrxGetter = nil
 	}
 
 	return navigator.LastError
@@ -78,10 +86,12 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 
 	client := gentleman.New()
 
-	if len(navigator.Model.BanSettings) > 0 && navigator.PrxGetter != nil {
+	if navigator.PrxGetter != nil {
 		proxyvalue, err := navigator.PrxGetter.GetProxy()
 		if err == nil {
-			client.Use(proxy.Set(map[string]string{"http": proxyvalue}))
+			client.Use(proxy.Set(map[string]string{
+				"http": "http://" + proxyvalue,
+			}))
 		}
 	}
 
