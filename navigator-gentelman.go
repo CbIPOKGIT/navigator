@@ -1,14 +1,18 @@
 package navigator
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
 	"gopkg.in/h2non/gentleman.v2"
 	"gopkg.in/h2non/gentleman.v2/plugins/proxy"
+	gtls "gopkg.in/h2non/gentleman.v2/plugins/tls"
 )
 
 type GentelmanNavigator struct {
@@ -36,6 +40,8 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 	var i int
 
 	for i = 0; i < navigator.calculateTriesCount(); i++ {
+		navigator.LastError = nil
+
 		if i > 0 {
 			navigator.destoyClient()
 		}
@@ -64,6 +70,10 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 		if err := navigator.createCrawlerFromHTML(response.String()); err != nil {
 			navigator.LastError = errors.New(fmt.Sprintf("Error create crawler from HTML: %s", err.Error()))
 			continue
+		} else {
+			if err := os.WriteFile("test.html", []byte(response.String()), 0777); err != nil {
+				log.Fatal(err)
+			}
 		}
 
 		if navigator.isValidResponse(navigator.NavigateStatus) {
@@ -85,12 +95,18 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 	}
 
 	client := gentleman.New()
+	client.Use(gtls.Config(&tls.Config{InsecureSkipVerify: true}))
 
 	if navigator.PrxGetter != nil {
-		proxyvalue, err := navigator.PrxGetter.GetProxy()
-		if err == nil {
+		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil {
+			p := &url.URL{
+				Scheme: "http",
+				Host:   proxyvalue,
+			}
+
 			client.Use(proxy.Set(map[string]string{
-				"http": "http://" + proxyvalue,
+				"http":  p.String(),
+				"https": p.String(),
 			}))
 		}
 	}
