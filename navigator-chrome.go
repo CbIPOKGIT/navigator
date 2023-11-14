@@ -97,6 +97,8 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 	var i int
 
 	for i = 0; i < navigator.calculateTriesCount(); i++ {
+		navigator.LastError = nil
+
 		if i > 0 {
 			navigator.Close()
 		} else {
@@ -331,8 +333,8 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 			Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
 
 		if navigator.PrxGetter != nil {
-			proxyvalue, err := navigator.PrxGetter.GetProxy()
-			if err == nil {
+
+			if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil {
 				l.Proxy(proxyvalue)
 			}
 		}
