@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	"gopkg.in/h2non/gentleman.v2"
@@ -70,10 +69,6 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 		if err := navigator.createCrawlerFromHTML(response.String()); err != nil {
 			navigator.LastError = errors.New(fmt.Sprintf("Error create crawler from HTML: %s", err.Error()))
 			continue
-		} else {
-			if err := os.WriteFile("test.html", []byte(response.String()), 0777); err != nil {
-				log.Fatal(err)
-			}
 		}
 
 		if navigator.isValidResponse(navigator.NavigateStatus) {
