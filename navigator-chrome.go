@@ -91,7 +91,7 @@ func (navigator *ChromeNavigator) GetActualUrl() string {
 
 func (navigator *ChromeNavigator) navigateUrl() error {
 	if navigator.Model.ClosePageEverytime && navigator.Page != nil {
-		navigator.Page.Close()
+		navigator.Close()
 	}
 
 	var i int
