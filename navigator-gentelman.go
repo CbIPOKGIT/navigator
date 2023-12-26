@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"time"
 
 	"gopkg.in/h2non/gentleman.v2"
@@ -94,14 +93,10 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 
 	if navigator.PrxGetter != nil {
 		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil {
-			p := &url.URL{
-				Scheme: "http",
-				Host:   proxyvalue,
-			}
 
 			client.Use(proxy.Set(map[string]string{
-				"http":  p.String(),
-				"https": p.String(),
+				"http":  proxyvalue,
+				"https": proxyvalue,
 			}))
 		}
 	}
