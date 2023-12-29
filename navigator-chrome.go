@@ -352,7 +352,32 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 func (navigator *ChromeNavigator) createPage() {
 	navigator.Page = navigator.Browser.MustPage()
 
+	if navigator.Model.InitialCookies != nil {
+		navigator.SetCookies()
+	}
+
 	navigator.Page.MustEvalOnNewDocument(`window.alert = (message) => console.log(message)`)
+}
+
+// Set cookies
+func (navigator *ChromeNavigator) SetCookies() {
+	cookies := make([]*proto.NetworkCookieParam, 0, len(navigator.Model.InitialCookies))
+
+	for _, cookie := range navigator.Model.InitialCookies {
+		parts := strings.Split(cookie, "=")
+		if len(parts) < 2 {
+			continue
+		}
+		cookies = append(cookies, &proto.NetworkCookieParam{
+			Name:    parts[0],
+			Value:   strings.Join(parts[1:], "="),
+			Domain:  navigator.Domen,
+			Path:    "/",
+			Expires: proto.TimeSinceEpoch(time.Now().Add(time.Hour * 24 * 365 * 10).Unix()),
+		})
+	}
+
+	navigator.Page.SetCookies(cookies)
 }
 
 // Beat the challange. Its something like Cloudflare protection.
