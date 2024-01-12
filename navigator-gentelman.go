@@ -103,6 +103,8 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 				}))
 			}
 		}
+	} else {
+		client.Use(proxy.Set(map[string]string{}))
 	}
 
 	if navigator.Model.InitialCookies != nil && len(navigator.Model.InitialCookies) > 0 {
