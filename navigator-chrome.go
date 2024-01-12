@@ -173,7 +173,7 @@ func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
 }
 
 func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.NetworkResponseReceived, error) {
-	defer handleErrorWithErrorChan(nil)
+	defer handleErrorWithErrorChan(nil, "wait response and load")
 
 	response := &proto.NetworkResponseReceived{}
 
@@ -183,10 +183,10 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 	checksuccess := make(chan any, 2)
 
 	go func() {
-		defer handleErrorWithAnyChan(rr)
+		defer handleErrorWithAnyChan(rr, "wait response")
 
 		go navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
-			defer handleErrorWithAnyChan(rr)
+			defer handleErrorWithAnyChan(rr, "wait response event")
 
 			if e.Type == proto.NetworkResourceTypeDocument {
 				response = e
@@ -200,14 +200,14 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.Net
 		if navigator.Model.NavigationSelector == "" {
 			// Навігація
 			go navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
-				defer handleErrorWithAnyChan(pl)
+				defer handleErrorWithAnyChan(pl, "wait page load event")
 				time.Sleep(time.Millisecond * 100)
 				pl <- nil
 				return false
 			})()
 		} else {
 			go func() {
-				defer handleErrorWithAnyChan(pl)
+				defer handleErrorWithAnyChan(pl, "wait page load event")
 				pl <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
 			}()
 		}
@@ -401,8 +401,8 @@ func (navigator *ChromeNavigator) beatChallange() error {
 	successChannel := make(chan error)
 
 	go func() {
-		defer handleErrorWithErrorChan(successChannel)
-		
+		defer handleErrorWithErrorChan(successChannel, "beat challange")
+
 		for {
 			if stopReloading.Load() {
 				return
