@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	"gopkg.in/h2non/gentleman.v2"
@@ -71,6 +72,7 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 		}
 
 		if navigator.isValidResponse(navigator.NavigateStatus) {
+			navigator.NoMoreTry = false
 			break
 		}
 	}
@@ -90,14 +92,16 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 
 	client := gentleman.New()
 	client.Use(gtls.Config(&tls.Config{InsecureSkipVerify: true}))
+	client.Context.Client.Timeout = time.Second * 30
 
 	if navigator.PrxGetter != nil {
 		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil {
-
-			client.Use(proxy.Set(map[string]string{
-				"http":  proxyvalue,
-				"https": proxyvalue,
-			}))
+			if u, err := url.Parse("http://" + proxyvalue); err == nil {
+				client.Use(proxy.Set(map[string]string{
+					"http":  u.String(),
+					"https": u.String(),
+				}))
+			}
 		}
 	}
 
