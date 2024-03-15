@@ -338,7 +338,8 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	if !useSystemChrome {
 		l := launcher.New().
 			Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome).
-			Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
+			Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages)).
+			Set("disable-gpu")
 
 		if navigator.PrxGetter != nil {
 
