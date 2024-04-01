@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -16,7 +15,7 @@ import (
 
 const (
 	DEFAULT_BROWSER_NAVIGATION_TIMEOUT = 60
-	CHALLANGE_TRIES_MAX_DURATION       = 30 // Challange beet max duration time
+	CHALLANGE_SOLVE_DURATION           = time.Minute * 2 // Challange solve max time duration
 )
 
 type ChromeNavigator struct {
@@ -162,118 +161,98 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 
 // Wait navigation response and sign page loaded
 func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
-	response, err := navigator.waitResponseAndLoad(url...)
+	responseCode, err := navigator.waitResponseAndLoad(url...)
 	if err != nil {
 		return err
 	}
 
 	navigator.LastError = nil
-	navigator.NavigateStatus = response.Response.Status
+	navigator.NavigateStatus = responseCode
 	return nil
 }
 
-func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (*proto.NetworkResponseReceived, error) {
+func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (int, error) {
 	defer handleErrorWithErrorChan(nil)
 
-	response := &proto.NetworkResponseReceived{}
+	responserecived := make(chan int, 1)
+	pageloaded := make(chan error, 1)
 
-	var responseRecived, pageLoaded bool
-
-	rr, pl := make(chan any, 1), make(chan any, 1)
-	checksuccess := make(chan any, 2)
-
-	go func() {
-		defer handleErrorWithAnyChan(rr)
-
-		go navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
-			defer handleErrorWithAnyChan(rr)
-
-			if e.Type == proto.NetworkResourceTypeDocument {
-				response = e
-				rr <- nil
-				return true
-			} else {
-				return false
+	go navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Println("Recovered in waitResponseAndLoad", r)
+				responserecived <- 0
 			}
-		})()
+		}()
 
-		if navigator.Model.NavigationSelector == "" {
-			// Навігація
-			go navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
-				defer handleErrorWithAnyChan(pl)
-				time.Sleep(time.Millisecond * 100)
-				pl <- nil
-				return false
-			})()
+		if e.Type == proto.NetworkResourceTypeDocument {
+			responserecived <- e.Response.Status
+			return true
 		} else {
-			go func() {
-				defer handleErrorWithAnyChan(pl)
-				pl <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
-			}()
+			return false
 		}
+	})()
 
-	}()
-
-	timer := time.NewTimer(time.Second * 30)
+	if navigator.Model.NavigationSelector == "" {
+		// Навігація
+		go navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
+			defer handleErrorWithErrorChan(pageloaded)
+			pageloaded <- nil
+			return false
+		})()
+	} else {
+		go func() {
+			defer handleErrorWithErrorChan(pageloaded)
+			pageloaded <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
+		}()
+	}
 
 	if len(url) > 0 {
 		time.Sleep(time.Millisecond * 10)
 		if err := navigator.Page.Navigate(url[0]); err != nil {
-			return nil, err
+			return 0, err
 		}
 	}
+
+	var responsecode int
+	var isResponsed, isLoaded bool
+
+	checksuccess := make(chan any, 1)
+
+	// Ліміт часу на виконання операції. Або на отримання відповіді від сайту, або на завантаження сторінки
+	timeout := time.NewTimer(time.Minute)
 
 	for {
 		select {
 
 		// Response recived
-		case <-rr:
-			responseRecived = true
-			checksuccess <- nil
-			timer.Stop()
-			timer.Reset(time.Second * 10)
+		case responsecode = <-responserecived:
+			// log.Printf("Response code %d", responsecode)
+			isResponsed = true
+			go func() { checksuccess <- nil }()
+			timeout.Stop()
+			timeout.Reset(time.Second * 20)
 
 		// Page loaded
-		case <-pl:
-			pageLoaded = true
-			checksuccess <- nil
+		case <-pageloaded:
+			// log.Println("Page loaded")
+			isLoaded = true
+			go func() { checksuccess <- nil }()
 
 		// Checking status
 		case <-checksuccess:
-			if pageLoaded && responseRecived {
-				return response, nil
+			if isLoaded && isResponsed {
+				return responsecode, nil
 			}
 
-		case <-timer.C:
-			if !responseRecived {
-				// log.Println("Timeout response")
-				return nil, errors.New("Timeout response")
+		case <-timeout.C:
+			if isResponsed {
+				log.Println("Timeout response")
+				return 0, errors.New("Timeout response")
 			}
-			return response, nil
+
+			return responsecode, nil
 		}
-	}
-}
-
-// Get page loading timeout
-func (navigator *ChromeNavigator) getPageLoadTimeout() time.Duration {
-	if navigator.Model.NavigationTimeout > 0 {
-		return time.Duration(navigator.Model.NavigationTimeout) * time.Second
-	} else {
-		return time.Duration(DEFAULT_BROWSER_NAVIGATION_TIMEOUT) * time.Second
-	}
-}
-
-// Get load event name
-func (navigator *ChromeNavigator) getPageLoadEvent() proto.PageLifecycleEventName {
-	switch navigator.Model.NavigationWaitfor {
-	case 1:
-		return proto.PageLifecycleEventNameNetworkAlmostIdle
-	case 2:
-		return proto.PageLifecycleEventNameNetworkIdle
-	case 3:
-		return proto.PageLifecycleEventNameLoad
-	default:
-		return proto.PageLifecycleEventNameDOMContentLoaded
 	}
 }
 
@@ -397,94 +376,78 @@ func (navigator *ChromeNavigator) beatChallange() error {
 		return nil
 	}
 
-	var stopReloading atomic.Bool
-
-	successChannel := make(chan error)
-
-	go func() {
-		defer handleErrorWithErrorChan(successChannel)
-
-		for {
-			if stopReloading.Load() {
-				return
-			}
-
-			haschalleng, err := navigator.hasChallange()
-			if err != nil {
-				successChannel <- err
-				return
-			}
-
-			if !haschalleng {
-				successChannel <- nil
-				return
-			}
-
-			if err := navigator.WaitTotalLoad(); err != nil {
-				successChannel <- err
-				return
-			}
-		}
-	}()
-
-	timer := time.NewTimer(time.Second * CHALLANGE_TRIES_MAX_DURATION)
-
-	select {
-	case err := <-successChannel:
-		stopReloading.Store(true)
-		return err
-	case <-timer.C:
-		stopReloading.Store(true)
-		return navigator.confirmNotARobot()
-		// return errors.New("Unable pass challange form")
+	if has, _ := navigator.hasChallange(); !has {
+		return nil
 	}
+
+	reloaded := make(chan error, 1)
+
+	waitreload := func() {
+		defer handleErrorWithErrorChan(reloaded)
+		reloaded <- navigator.WaitTotalLoad()
+	}
+	go waitreload()
+
+	timeout := time.NewTimer(CHALLANGE_SOLVE_DURATION)
+	clickticker := time.NewTicker(time.Second * 10)
+
+	for {
+		select {
+		case err := <-reloaded:
+			if err != nil {
+				return err
+			}
+			if has, _ := navigator.hasChallange(); has {
+				go waitreload()
+				continue
+			}
+			return nil
+		case <-clickticker.C:
+			if has, err := navigator.hasChallange(); err == nil && !has {
+				return nil
+			}
+
+			if err := navigator.confirmNotARobot(); err == nil {
+				log.Println("Success clicked I'm not robot")
+			} else {
+				log.Println("Error click I'm not robot: " + err.Error())
+			}
+			continue
+		case <-timeout.C:
+			return errors.New("Unable pass challange form")
+		}
+	}
+
 }
 
 // Try click I'm not robot
 func (navigator *ChromeNavigator) confirmNotARobot() error {
-	errorUnablePassChallange := errors.New("Unable pass challange form")
+	var errorUnablePassChallange error = errors.New("Unable pass challange form")
 
-	// Кількість спроб - 3
-	for i := 0; i < 3; i++ {
-		haschallenge, err := navigator.hasChallange()
-		if err != nil {
-			return err
-		}
-
-		if !haschallenge {
-			return nil
-		}
-
-		time.Sleep(time.Second * 5)
-
-		iframe, err := navigator.Page.Element("iframe")
-		if err != nil || iframe == nil {
-			return errorUnablePassChallange
-		}
-
-		if _, err = iframe.Frame(); err != nil {
-			return errorUnablePassChallange
-		}
-
-		resp := navigator.Page.MustEval("() => JSON.stringify(document.querySelector('iframe').getBoundingClientRect())")
-		coords := make(map[string]float64, 4)
-
-		if err := json.Unmarshal([]byte(resp.Str()), &coords); err != nil {
-			return errorUnablePassChallange
-		}
-
-		navigator.Page.Activate()
-		time.Sleep(time.Millisecond * 500)
-
-		navigator.Page.Mouse.MoveLinear(proto.Point{X: coords["x"] + 20, Y: coords["y"] + 20}, 10)
-		time.Sleep(time.Millisecond * 500)
-
-		navigator.Page.Mouse.MustClick(proto.InputMouseButtonLeft)
-
-		navigator.WaitTotalLoad()
+	iframe, err := navigator.Page.Element("iframe")
+	if err != nil || iframe == nil {
+		return errorUnablePassChallange
 	}
 
-	return errorUnablePassChallange
+	if _, err = iframe.Frame(); err != nil {
+		return errorUnablePassChallange
+	}
+
+	resp := navigator.Page.MustEval("() => JSON.stringify(document.querySelector('iframe').getBoundingClientRect())")
+	coords := make(map[string]float64, 4)
+
+	if err := json.Unmarshal([]byte(resp.Str()), &coords); err != nil {
+		return errorUnablePassChallange
+	}
+
+	navigator.Page.Activate()
+	time.Sleep(time.Millisecond * 500)
+
+	navigator.Page.Mouse.MoveLinear(proto.Point{X: coords["x"] + 20, Y: coords["y"] + 20}, 10)
+	time.Sleep(time.Millisecond * 500)
+
+	navigator.Page.Mouse.MustClick(proto.InputMouseButtonLeft)
+	return nil
 }
 
 func (navigator *ChromeNavigator) hasChallange() (bool, error) {
