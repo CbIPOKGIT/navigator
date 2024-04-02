@@ -171,6 +171,7 @@ func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
 	return nil
 }
 
+// Total rewrite of waitResponseAndLoad
 func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (int, error) {
 	defer handleErrorWithErrorChan(nil)
 
