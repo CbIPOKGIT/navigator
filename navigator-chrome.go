@@ -383,26 +383,34 @@ func (navigator *ChromeNavigator) beatChallange() error {
 
 	reloaded := make(chan error, 1)
 
+	var isReloading bool
+
 	waitreload := func() {
 		defer handleErrorWithErrorChan(reloaded)
-		reloaded <- navigator.WaitTotalLoad()
+		navigator.WaitTotalLoad()
+		isReloading = false
+		log.Println("Reloaded")
+		reloaded <- nil
 	}
-	go waitreload()
 
 	timeout := time.NewTimer(CHALLANGE_SOLVE_DURATION)
 	clickticker := time.NewTicker(time.Second * 10)
 
 	for {
 		select {
-		case err := <-reloaded:
-			if err != nil {
-				return err
+		case <-reloaded:
+			if !isReloading {
+				isReloading = true
+			} else {
+				continue
 			}
+
 			if has, _ := navigator.hasChallange(); has {
 				go waitreload()
 				continue
+			} else {
+				return nil
 			}
-			return nil
 		case <-clickticker.C:
 			if has, err := navigator.hasChallange(); err == nil && !has {
 				return nil
@@ -413,6 +421,8 @@ func (navigator *ChromeNavigator) beatChallange() error {
 			} else {
 				log.Println("Error click I'm not robot: " + err.Error())
 			}
+
+			go func() { reloaded <- nil }()
 			continue
 		case <-timeout.C:
 			return errors.New("Unable pass challange form")
