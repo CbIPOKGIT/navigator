@@ -5,9 +5,9 @@ import (
 	"log"
 )
 
-func handleErrorWithErrorChan(errChan chan error, description string) {
+func handleErrorWithErrorChan(errChan chan error) {
 	if err := recover(); err != nil {
-		log.Printf("Panic %s: %v", description, err)
+		log.Printf("Panic: %v", err)
 
 		if errChan != nil {
 			if errData, is := err.(error); is {
@@ -20,10 +20,10 @@ func handleErrorWithErrorChan(errChan chan error, description string) {
 	}
 }
 
-func handleErrorWithAnyChan(errChan chan any, description string) {
+func handleErrorWithAnyChan(errChan chan any) {
 	if err := recover(); err != nil {
 
-		log.Printf("Panic %s: %v", description, err)
+		log.Printf("Panic: %v", err)
 
 		if errChan != nil {
 			errChan <- err
