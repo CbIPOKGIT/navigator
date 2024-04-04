@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -108,13 +107,7 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 	}
 
 	if navigator.Model.InitialCookies != nil && len(navigator.Model.InitialCookies) > 0 {
-		cookies := make([]*http.Cookie, 0, len(navigator.Model.InitialCookies))
-		for key, val := range navigator.Model.InitialCookies {
-			cookies = append(cookies, &http.Cookie{
-				Name:  key,
-				Value: val,
-			})
-		}
+		client.AddCookies(navigator.Model.InitialCookies)
 	}
 
 	navigator.Client = client

@@ -1,5 +1,7 @@
 package navigator
 
+import "net/http"
+
 const (
 	WAIT_DOMCONTENTLOADED int = iota
 	WAIT_NETWORK_ALMOST_IDLE
@@ -53,7 +55,7 @@ type Model struct {
 	CaptchaSelectorInverted bool `json:"captcha_selector_inverted"`
 
 	// List of initial cookies on page
-	InitialCookies map[string]string `json:"initial_cookies"`
+	InitialCookies []*http.Cookie `json:"initial_cookies"`
 
 	// JS script wich eval after first navigation
 	PreScript string `json:"pre_script"`

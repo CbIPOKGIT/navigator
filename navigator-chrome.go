@@ -353,17 +353,21 @@ func (navigator *ChromeNavigator) SetCookies() {
 	cookies := make([]*proto.NetworkCookieParam, 0, len(navigator.Model.InitialCookies))
 
 	for _, cookie := range navigator.Model.InitialCookies {
-		parts := strings.Split(cookie, "=")
-		if len(parts) < 2 {
-			continue
+		c := &proto.NetworkCookieParam{
+			Name:     cookie.Name,
+			Value:    cookie.Value,
+			Domain:   cookie.Domain,
+			Path:     cookie.Path,
+			Secure:   cookie.Secure,
+			HTTPOnly: cookie.HttpOnly,
 		}
-		cookies = append(cookies, &proto.NetworkCookieParam{
-			Name:    parts[0],
-			Value:   strings.Join(parts[1:], "="),
-			Domain:  navigator.Domen,
-			Path:    "/",
-			Expires: proto.TimeSinceEpoch(time.Now().Add(time.Hour * 24 * 365 * 10).Unix()),
-		})
+
+		if cookie.MaxAge == 0 {
+			c.Expires = proto.TimeSinceEpoch(time.Now().Add(time.Minute * 30).Unix())
+		} else {
+			c.Expires = proto.TimeSinceEpoch(time.Now().Add(time.Second * time.Duration(cookie.MaxAge)).Unix())
+		}
+		cookies = append(cookies, c)
 	}
 
 	navigator.Page.SetCookies(cookies)
