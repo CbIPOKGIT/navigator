@@ -11,6 +11,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/go-rod/stealth"
 )
 
 const (
@@ -163,6 +164,7 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
 	responseCode, err := navigator.waitResponseAndLoad(url...)
 	if err != nil {
+		navigator.LastError = err
 		return err
 	}
 
@@ -231,8 +233,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (int, error
 			// log.Printf("Response code %d", responsecode)
 			isResponsed = true
 			go func() { checksuccess <- nil }()
-			timeout.Stop()
-			timeout.Reset(time.Second * 20)
+			timeout.Reset(time.Second * 30)
 
 		// Page loaded
 		case <-pageloaded:
@@ -318,8 +319,7 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	if !useSystemChrome {
 		l := launcher.New().
 			Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome).
-			Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages)).
-			Set("disable-gpu")
+			Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
 
 		if navigator.PrxGetter != nil {
 
@@ -339,7 +339,7 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 }
 
 func (navigator *ChromeNavigator) createPage() {
-	navigator.Page = navigator.Browser.MustPage()
+	navigator.Page = stealth.MustPage(navigator.Browser)
 
 	if navigator.Model.InitialCookies != nil {
 		navigator.SetCookies()
@@ -397,8 +397,7 @@ func (navigator *ChromeNavigator) beatChallange() error {
 		reloaded <- nil
 	}
 
-	timeout := time.NewTimer(CHALLANGE_SOLVE_DURATION)
-	clickticker := time.NewTicker(time.Second * 10)
+	clickticker := time.NewTicker(time.Second * 20)
 
 	for {
 		select {
@@ -428,8 +427,8 @@ func (navigator *ChromeNavigator) beatChallange() error {
 
 			go func() { reloaded <- nil }()
 			continue
-		case <-timeout.C:
-			return errors.New("Unable pass challange form")
+		case <-time.After(CHALLANGE_SOLVE_DURATION):
+			return errors.New("unable pass challange form")
 		}
 	}
 
