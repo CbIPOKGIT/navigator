@@ -71,6 +71,9 @@ type Model struct {
 
 	// Close client after every navigation
 	ClosePageEverytime bool `json:"close_page_everytime"`
+
+	// Emulate mobile device
+	EmulateDevice uint8 `json:"emulate_device"`
 }
 
 type BanFlags struct {

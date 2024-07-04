@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/devices"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 )
@@ -16,6 +17,10 @@ import (
 const (
 	DEFAULT_BROWSER_NAVIGATION_TIMEOUT = 60
 	CHALLANGE_SOLVE_DURATION           = time.Minute * 2 // Challange solve max time duration
+)
+
+const (
+	EMULATE_GOOGLE_PIXEL uint8 = iota + 1
 )
 
 type ChromeNavigator struct {
@@ -340,6 +345,14 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 
 func (navigator *ChromeNavigator) createPage() {
 	navigator.Page = navigator.Browser.MustPage()
+
+	if navigator.Model.EmulateDevice != 0 {
+		switch navigator.Model.EmulateDevice {
+		case EMULATE_GOOGLE_PIXEL:
+			navigator.Page = navigator.Page.MustEmulate(devices.Pixel2XL)
+		}
+
+	}
 
 	if navigator.Model.InitialCookies != nil {
 		navigator.SetCookies()
