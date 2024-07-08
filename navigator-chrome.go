@@ -271,7 +271,7 @@ func (navigator *ChromeNavigator) WaitCreateCrawler() error {
 		}
 
 		if err := navigator.createCrawlerFromHTML(html); err != nil {
-			return errors.New(fmt.Sprintf("Error create crawler from HTML: %s", err.Error()))
+			return fmt.Errorf("error create crawler from HTML: %s", err.Error())
 		}
 
 		if strings.TrimSpace(navigator.Crawler.Find("body").Text()) == "" {
@@ -503,7 +503,7 @@ func (navigator *ChromeNavigator) solveCaptcha() error {
 		return err
 	}
 	if !solved {
-		return errors.New("Cannot solve captcha")
+		return errors.New("cannot solve captcha")
 	}
 	return nil
 }
