@@ -358,6 +358,12 @@ func (navigator *ChromeNavigator) createPage() {
 		navigator.SetCookies()
 	}
 
+	if navigator.Model.UserAgent != "" {
+		navigator.Page.SetUserAgent(&proto.NetworkSetUserAgentOverride{
+			UserAgent: navigator.Model.UserAgent,
+		})
+	}
+
 	navigator.Page.MustEvalOnNewDocument(`window.alert = (message) => console.log(message)`)
 }
 
