@@ -167,19 +167,18 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 
 // Wait navigation response and sign page loaded
 func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
-	responseCode, err := navigator.waitResponseAndLoad(url...)
+	err := navigator.waitResponseAndLoad(url...)
 	if err != nil {
 		navigator.LastError = err
 		return err
 	}
 
 	navigator.LastError = nil
-	navigator.NavigateStatus = responseCode
 	return nil
 }
 
 // Total rewrite of waitResponseAndLoad
-func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (int, error) {
+func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 	defer handleErrorWithErrorChan(nil)
 
 	responserecived := make(chan int, 1)
@@ -218,7 +217,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (int, error
 	if len(url) > 0 {
 		time.Sleep(time.Millisecond * 10)
 		if err := navigator.Page.Navigate(url[0]); err != nil {
-			return 0, err
+			return err
 		}
 	}
 
@@ -235,6 +234,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (int, error
 
 		// Response recived
 		case responsecode = <-responserecived:
+			navigator.NavigateStatus = responsecode
 			// log.Printf("Response code %d", responsecode)
 			isResponsed = true
 			go func() { checksuccess <- nil }()
@@ -249,16 +249,16 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) (int, error
 		// Checking status
 		case <-checksuccess:
 			if isLoaded && isResponsed {
-				return responsecode, nil
+				return nil
 			}
 
 		case <-timeout.C:
 			if isResponsed {
 				log.Println("Timeout response")
-				return 0, errors.New("Timeout response")
+				return errors.New("timeout response")
 			}
 
-			return responsecode, nil
+			return nil
 		}
 	}
 }
