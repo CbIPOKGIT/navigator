@@ -1,7 +1,6 @@
 package navigator
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -390,102 +389,6 @@ func (navigator *ChromeNavigator) SetCookies() {
 	}
 
 	navigator.Page.SetCookies(cookies)
-}
-
-// Beat the challange. Its something like Cloudflare protection.
-//
-// Max reloads count - 5
-func (navigator *ChromeNavigator) beatChallange() error {
-	if navigator.Model.ChallangeSelector == "" {
-		return nil
-	}
-
-	if has, _ := navigator.hasChallange(); !has {
-		return nil
-	}
-
-	reloaded := make(chan error, 1)
-
-	var isReloading bool
-
-	waitreload := func() {
-		defer handleErrorWithErrorChan(reloaded)
-		navigator.WaitTotalLoad()
-		isReloading = false
-		log.Println("Reloaded")
-		reloaded <- nil
-	}
-
-	clickticker := time.NewTicker(time.Second * 20)
-
-	for {
-		select {
-		case <-reloaded:
-			if !isReloading {
-				isReloading = true
-			} else {
-				continue
-			}
-
-			if has, _ := navigator.hasChallange(); has {
-				go waitreload()
-				continue
-			} else {
-				return nil
-			}
-		case <-clickticker.C:
-			if has, err := navigator.hasChallange(); err == nil && !has {
-				return nil
-			}
-
-			if err := navigator.confirmNotARobot(); err == nil {
-				log.Println("Success clicked I'm not robot")
-			} else {
-				log.Println("Error click I'm not robot: " + err.Error())
-			}
-
-			go func() { reloaded <- nil }()
-			continue
-		case <-time.After(CHALLANGE_SOLVE_DURATION):
-			return errors.New("unable pass challange form")
-		}
-	}
-
-}
-
-// Try click I'm not robot
-func (navigator *ChromeNavigator) confirmNotARobot() error {
-	var errorUnablePassChallange error = errors.New("Unable pass challange form")
-
-	iframe, err := navigator.Page.Element("iframe")
-	if err != nil || iframe == nil {
-		return errorUnablePassChallange
-	}
-
-	if _, err = iframe.Frame(); err != nil {
-		return errorUnablePassChallange
-	}
-
-	resp := navigator.Page.MustEval("() => JSON.stringify(document.querySelector('iframe').getBoundingClientRect())")
-	coords := make(map[string]float64, 4)
-
-	if err := json.Unmarshal([]byte(resp.Str()), &coords); err != nil {
-		return errorUnablePassChallange
-	}
-
-	navigator.Page.Activate()
-	time.Sleep(time.Millisecond * 500)
-
-	navigator.Page.Mouse.MoveLinear(proto.Point{X: coords["x"] + 20, Y: coords["y"] + 20}, 10)
-	time.Sleep(time.Millisecond * 500)
-
-	navigator.Page.Mouse.MustClick(proto.InputMouseButtonLeft)
-	return nil
-}
-
-func (navigator *ChromeNavigator) hasChallange() (bool, error) {
-	has, _, err := navigator.Page.Has(navigator.Model.ChallangeSelector)
-	return has, err
 }
 
 // Solve captcha if presented
