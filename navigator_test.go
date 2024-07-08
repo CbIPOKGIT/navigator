@@ -1,31 +1,28 @@
 package navigator
 
 import (
-	"log"
 	"testing"
+	"time"
 )
 
-func TestGentelmanNavigator(t *testing.T) {
-	urls := []string{
-		"https://enter.online/piscine/intex-28210-6503-l-cu-cadru-blue",
-		"https://enter.online/piscine/bestway-56283bw-580-l-cu-cadru-blue",
-		"https://rozetka.com.ua/ua/buromax_bm7051_00/p354630159/",
-	}
+func TestChromeNavigator(t *testing.T) {
+	url := "https://recond.ua/product/viessmann-vitodens-050-w-b0ka-25-kvt-z024844"
 
-	navigator := NewNavigator(&Model{
-		Chrome:            true,
-		Visible:           true,
-		UseSystemChrome:   true,
-		ShowImages:        true,
-		ChallangeSelector: "#challenge-form",
+	nav := NewNavigator(&Model{
+		Chrome:          true,
+		Visible:         true,
+		ShowImages:      true,
+		UseSystemChrome: true,
+		// UserAgent:  "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36",
 	})
 
-	defer navigator.Close()
+	defer nav.Close()
 
-	for _, url := range urls {
-		err := navigator.Navigate(url)
-		log.Println(err)
-		log.Println(navigator.GetNavigateStatus())
-		// log.Println(navigator.GetCrawler().Html())
+	err := nav.Navigate(url)
+	if err != nil {
+		t.Error(err)
+		return
 	}
+
+	time.Sleep(time.Second)
 }
