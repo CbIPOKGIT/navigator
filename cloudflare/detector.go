@@ -11,7 +11,7 @@ const (
 )
 
 func (s *Solver) Is(page *rod.Page) bool {
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 400)
 	if s.captchaSelector != "" {
 		return s.hasElementBySelector(page, s.captchaSelector)
 	}
