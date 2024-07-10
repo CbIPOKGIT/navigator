@@ -373,9 +373,9 @@ func (navigator *ChromeNavigator) createPage() {
 
 	if navigator.ClfSolver != nil {
 		navigator.Page.MustEvalOnNewDocument(`
-			var cloudflareData
 			const i = setInterval(()=>{
 			if (window.turnstile) {
+				console.log('Turnstile found')
 				clearInterval(i)
 				window.turnstile.render = (a,b) => {
 					let p = {
@@ -387,8 +387,8 @@ func (navigator *ChromeNavigator) createPage() {
 						action: b.action,
 						userAgent: navigator.userAgent
 					}
-					cloudflareData = JSON.stringify(p)
-					console.log(cloudflareData)
+					window.cloudflareData = JSON.stringify(p)
+					console.log(cloudflareData || 'No data')
 					window.tsCallback = b.callback
 					return 'foo'
 				}
