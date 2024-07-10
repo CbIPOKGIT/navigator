@@ -9,13 +9,28 @@ import (
 )
 
 func (s *Solver) getCloudflareData(page *rod.Page) (string, error) {
-	time.Sleep(time.Second)
-	data, err := page.Eval(`() => cloudflareData`)
-	if err != nil {
-		return "", err
+
+	for i := 0; i < 10; i++ {
+		page.Activate()
+
+		time.Sleep(time.Second)
+
+		data, err := page.Eval(`() => cloudflareData`)
+		if err == nil {
+			dataValue := data.Value.String()
+			if len(dataValue) > 100 {
+				return dataValue, nil
+			}
+		}
+
+		page.Reload()
+		if err := s.waitReload(page); err != nil {
+			return "", err
+		}
+
 	}
 
-	return data.Value.Str(), nil
+	return "", errors.New("cloudflare data not found")
 }
 
 func (s *Solver) resolveToken(page *rod.Page, token string) error {
@@ -23,6 +38,10 @@ func (s *Solver) resolveToken(page *rod.Page, token string) error {
 		return err
 	}
 
+	return s.waitReload(page)
+}
+
+func (s *Solver) waitReload(page *rod.Page) error {
 	loaded := make(chan any, 1)
 
 	go page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {

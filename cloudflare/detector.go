@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	DEFAULT_CAPTCHA_SELECTOR = "#turnstile-wrapper, #ie-container"
+	DEFAULT_CAPTCHA_SELECTOR = "#turnstile-wrapper, #ie-container, #turnstile-box"
 )
 
 func (s *Solver) Is(page *rod.Page) bool {
