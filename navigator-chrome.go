@@ -28,6 +28,8 @@ type ChromeNavigator struct {
 
 	Browser *rod.Browser
 	Page    *rod.Page
+
+	ClfSolver CloudflareSolver
 }
 
 // Interface implementation
@@ -91,6 +93,10 @@ func (navigator *ChromeNavigator) GetActualUrl() string {
 		return navigator.Url
 	}
 	return info.URL
+}
+
+func (navigator *ChromeNavigator) SetCloudflareSolver(solver CloudflareSolver) {
+	navigator.ClfSolver = solver
 }
 
 func (navigator *ChromeNavigator) navigateUrl() error {
@@ -364,6 +370,32 @@ func (navigator *ChromeNavigator) createPage() {
 	}
 
 	navigator.Page.MustEvalOnNewDocument(`window.alert = (message) => console.log(message)`)
+
+	if navigator.ClfSolver != nil {
+		navigator.Page.MustEvalOnNewDocument(`
+			var cloudflareData
+			const i = setInterval(()=>{
+			if (window.turnstile) {
+				clearInterval(i)
+				window.turnstile.render = (a,b) => {
+					let p = {
+						type: "TurnstileTaskProxyless",
+						websiteKey: b.sitekey,
+						websiteURL: window.location.href,
+						data: b.cData,
+						pagedata: b.chlPageData,
+						action: b.action,
+						userAgent: navigator.userAgent
+					}
+					cloudflareData = JSON.stringify(p)
+					console.log(cloudflareData)
+					window.tsCallback = b.callback
+					return 'foo'
+				}
+			}
+			},10)  
+		`)
+	}
 }
 
 // Set cookies
