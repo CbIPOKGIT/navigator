@@ -2,13 +2,14 @@ package cloudflare
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 )
 
-func (s *Solver) getCloudflareData(page *rod.Page) (string, error) {
+func (s *Solver) getCloudflareData(page *rod.Page) (string, bool, error) {
 
 	for i := 0; i < 10; i++ {
 		page.Activate()
@@ -19,23 +20,42 @@ func (s *Solver) getCloudflareData(page *rod.Page) (string, error) {
 		if err == nil {
 			dataValue := data.Value.String()
 			if len(dataValue) > 100 {
-				return dataValue, nil
+				return dataValue, false, nil
+			}
+		} else if s.scriptSitekey != "" {
+			script := fmt.Sprintf(`() => {
+				%s
+			}`, s.scriptSitekey)
+			dataValue, errValue := page.Eval(script)
+
+			if errValue == nil {
+				return dataValue.Value.Str(), true, nil
 			}
 		}
 
 		page.Reload()
 		if err := s.waitReload(page); err != nil {
-			return "", err
+			return "", false, err
 		}
 
 	}
 
-	return "", errors.New("cloudflare data not found")
+	return "", false, errors.New("cloudflare data not found")
 }
 
-func (s *Solver) resolveToken(page *rod.Page, token string) error {
-	if _, err := page.Eval(`token => tsCallback(token)`, token); err != nil {
-		return err
+func (s *Solver) resolveToken(page *rod.Page, standalone bool, token string) error {
+	if standalone && s.scriptSolve != "" {
+		script := fmt.Sprintf(`async (response) => {
+			%s
+		}`, s.scriptSolve)
+		_, err := page.Eval(script, token)
+		if err != nil {
+			return err
+		}
+	} else {
+		if _, err := page.Eval(`token => tsCallback(token)`, token); err != nil {
+			return err
+		}
 	}
 
 	return s.waitReload(page)

@@ -16,6 +16,10 @@ type CloudflareSolver interface {
 	Is(*rod.Page) bool // check if page has Cloudflare protection
 
 	Solve(*rod.Page) error // solve Cloudflare protection
+
+	SetSitekeyScript(string) // set script to get sitekey
+
+	SetSolveScript(string) // set script to solve challenge
 }
 
 // beatChallange - beat the challange. Its something like Cloudflare protection.

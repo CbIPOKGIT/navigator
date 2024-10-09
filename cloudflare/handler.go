@@ -7,7 +7,7 @@ import (
 func (s *Solver) Solve(page *rod.Page) error {
 	page.Activate()
 
-	data, err := s.getCloudflareData(page)
+	data, standalone, err := s.getCloudflareData(page)
 	if err != nil {
 		return err
 	}
@@ -22,5 +22,5 @@ func (s *Solver) Solve(page *rod.Page) error {
 		return err
 	}
 
-	return s.resolveToken(page, token)
+	return s.resolveToken(page, standalone, token)
 }
