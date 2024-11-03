@@ -1,12 +1,10 @@
 module github.com/CbIPOKGIT/navigator
 
-go 1.21
-
-toolchain go1.22.0
+go 1.23
 
 require (
-	github.com/PuerkitoBio/goquery v1.9.2
-	github.com/go-rod/rod v0.116.1
+	github.com/PuerkitoBio/goquery v1.10.0
+	github.com/go-rod/rod v0.116.2
 	github.com/go-rod/stealth v0.4.9
 	gopkg.in/h2non/gentleman.v2 v2.0.5
 )
@@ -18,6 +16,6 @@ require (
 	github.com/ysmood/goob v0.4.0 // indirect
 	github.com/ysmood/got v0.40.0 // indirect
 	github.com/ysmood/gson v0.7.3 // indirect
-	github.com/ysmood/leakless v0.8.0 // indirect
-	golang.org/x/net v0.24.0 // indirect
+	github.com/ysmood/leakless v0.9.0 // indirect
+	golang.org/x/net v0.29.0 // indirect
 )
