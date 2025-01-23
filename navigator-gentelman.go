@@ -94,8 +94,8 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 	client.Context.Client.Timeout = time.Second * 30
 
 	if navigator.PrxGetter != nil {
-		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil {
-			if u, err := url.Parse("http://" + proxyvalue); err == nil {
+		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil && proxyvalue != "" {
+			if u, err := url.Parse(proxyvalue); err == nil {
 				client.Use(proxy.Set(map[string]string{
 					"http":  u.String(),
 					"https": u.String(),
@@ -106,7 +106,7 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 		client.Use(proxy.Set(map[string]string{}))
 	}
 
-	if navigator.Model.InitialCookies != nil && len(navigator.Model.InitialCookies) > 0 {
+	if len(navigator.Model.InitialCookies) > 0 {
 		client.AddCookies(navigator.Model.InitialCookies)
 	}
 

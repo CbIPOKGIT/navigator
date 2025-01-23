@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -317,6 +318,9 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 
 	var useSystemChrome bool = navigator.Model.UseSystemChrome
 
+	var useProxy bool = navigator.PrxGetter != nil
+	var proxy *url.URL
+
 	// Пробуємо системний хром якщо потрібен.
 	// В випадку помилки будемо запускатись стандартно
 	if useSystemChrome {
@@ -331,10 +335,14 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 			Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome).
 			Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
 
-		if navigator.PrxGetter != nil {
-
-			if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil {
-				l.Proxy(proxyvalue)
+		if useProxy {
+			if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil && proxyvalue != "" {
+				if parsedProxy, err := url.Parse(proxyvalue); err == nil {
+					proxy = parsedProxy
+					l.Proxy(fmt.Sprintf("%s:%s", proxy.Hostname(), proxy.Port()))
+				} else {
+					useProxy = false
+				}
 			}
 		}
 
@@ -345,7 +353,20 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 		return nil, err
 	}
 
-	return rod.New().ControlURL(u).MustConnect().NoDefaultDevice(), nil
+	browser := rod.New().
+		ControlURL(u).
+		MustConnect().
+		NoDefaultDevice()
+
+	if useProxy && proxy != nil && proxy.User != nil {
+		if username := proxy.User.Username(); username != "" {
+			password, _ := proxy.User.Password()
+			go browser.MustHandleAuth(username, password)()
+		}
+	}
+
+	browser.IgnoreCertErrors(true)
+	return browser, nil
 }
 
 func (navigator *ChromeNavigator) createPage() {
