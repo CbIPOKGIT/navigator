@@ -72,7 +72,7 @@ func (s *Solver) waitReload(page *rod.Page) error {
 	select {
 	case <-loaded:
 		return nil
-	case <-time.After(time.Second * 30):
+	case <-time.After(time.Second * 60):
 		return errors.New("timeout waiting for page to load")
 	}
 }

@@ -244,7 +244,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 			// log.Printf("Response code %d", responsecode)
 			isResponsed = true
 			go func() { checksuccess <- nil }()
-			timeout.Reset(time.Second * 30)
+			timeout.Reset(time.Minute)
 
 		// Page loaded
 		case <-pageloaded:
@@ -343,6 +343,9 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 				} else {
 					useProxy = false
 				}
+			} else {
+				log.Println(err)
+				log.Println(proxyvalue)
 			}
 		}
 
@@ -361,7 +364,7 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	if useProxy && proxy != nil && proxy.User != nil {
 		if username := proxy.User.Username(); username != "" {
 			password, _ := proxy.User.Password()
-			go browser.MustHandleAuth(username, password)()
+			go browser.HandleAuth(username, password)()
 		}
 	}
 
