@@ -2,6 +2,7 @@ package navigator
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -54,9 +55,12 @@ func (n *ChromeNavigator) waitReloads(response chan error) {
 	var step int = 0
 
 	for step < 5 {
-		if n.hasChallenge() {
+		if !n.hasChallenge() {
+			log.Println("No challange")
 			response <- nil
 			return
+		} else {
+			log.Println("Challenge detected. Try to solve it.")
 		}
 
 		if err := n.waitResponseAndLoad(); err != nil {
