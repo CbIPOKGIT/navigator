@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -159,7 +160,7 @@ func (navigator *CommonNavigator) calculateTriesCount() int {
 }
 
 // Create crawler from response
-func (navigator *CommonNavigator) createCrawlerFromHTML(html string) error {
+func (navigator *CommonNavigator) СreateCrawlerFromHTML(html string) error {
 	crawler, err := goquery.NewDocumentFromReader(bytes.NewBuffer([]byte(html)))
 	if err != nil {
 		return err
@@ -183,4 +184,12 @@ func (navigator *CommonNavigator) createCrawlerFromHTML(html string) error {
 // Valid repsponses 200 and 404
 func (navigator *CommonNavigator) isValidResponse(code int) bool {
 	return code == 200 || code == 404
+}
+
+func (navigator *CommonNavigator) calculateNavigationTimeout() time.Duration {
+	if navigator.Model.NavigationTimeout > 0 {
+		return time.Duration(navigator.Model.NavigationTimeout) * time.Second
+	} else {
+		return time.Duration(time.Minute)
+	}
 }

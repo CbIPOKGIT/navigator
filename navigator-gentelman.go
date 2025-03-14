@@ -65,7 +65,7 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 
 		navigator.NavigateStatus = response.StatusCode
 
-		if err := navigator.createCrawlerFromHTML(response.String()); err != nil {
+		if err := navigator.СreateCrawlerFromHTML(response.String()); err != nil {
 			navigator.LastError = fmt.Errorf("error create crawler from HTML: %s", err.Error())
 			continue
 		}
@@ -91,7 +91,7 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 
 	client := gentleman.New()
 	client.Use(gtls.Config(&tls.Config{InsecureSkipVerify: true}))
-	client.Context.Client.Timeout = time.Second * 30
+	client.Context.Client.Timeout = navigator.calculateNavigationTimeout()
 
 	if navigator.PrxGetter != nil {
 		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil && proxyvalue != "" {

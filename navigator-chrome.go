@@ -191,13 +191,6 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 	pageloaded := make(chan error, 1)
 
 	go navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Println("Recovered in waitResponseAndLoad", r)
-				responserecived <- 0
-			}
-		}()
-
 		if e.Type == proto.NetworkResourceTypeDocument {
 			responserecived <- e.Response.Status
 			return true
@@ -209,13 +202,11 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 	if navigator.Model.NavigationSelector == "" {
 		// Навігація
 		go navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
-			defer handleErrorWithErrorChan(pageloaded)
 			pageloaded <- nil
 			return false
 		})()
 	} else {
 		go func() {
-			defer handleErrorWithErrorChan(pageloaded)
 			pageloaded <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
 		}()
 	}
@@ -233,7 +224,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 	checksuccess := make(chan any, 1)
 
 	// Ліміт часу на виконання операції. Або на отримання відповіді від сайту, або на завантаження сторінки
-	timeout := time.NewTimer(time.Minute)
+	timeout := time.NewTimer(navigator.calculateNavigationTimeout())
 
 	for {
 		select {
@@ -241,7 +232,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 		// Response recived
 		case responsecode = <-responserecived:
 			navigator.NavigateStatus = responsecode
-			// log.Printf("Response code %d", responsecode)
+			log.Printf("Response code %d", responsecode)
 			isResponsed = true
 			go func() { checksuccess <- nil }()
 			timeout.Reset(time.Minute)
@@ -259,7 +250,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 			}
 
 		case <-timeout.C:
-			if isResponsed {
+			if !isResponsed {
 				log.Println("Timeout response")
 				return errors.New("timeout response")
 			}
@@ -276,7 +267,7 @@ func (navigator *ChromeNavigator) WaitCreateCrawler() error {
 			return err
 		}
 
-		if err := navigator.createCrawlerFromHTML(html); err != nil {
+		if err := navigator.СreateCrawlerFromHTML(html); err != nil {
 			return fmt.Errorf("error create crawler from HTML: %s", err.Error())
 		}
 
@@ -318,7 +309,6 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 
 	var useSystemChrome bool = navigator.Model.UseSystemChrome
 
-	var useProxy bool = navigator.PrxGetter != nil
 	var proxy *url.URL
 
 	// Пробуємо системний хром якщо потрібен.
@@ -331,21 +321,17 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	}
 
 	if !useSystemChrome {
-		l := launcher.New().
-			Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome).
-			Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
+		l := launcher.New().Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
+		l = l.Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome)
 
-		if useProxy {
+		if navigator.PrxGetter != nil {
 			if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil && proxyvalue != "" {
 				if parsedProxy, err := url.Parse(proxyvalue); err == nil {
 					proxy = parsedProxy
 					l.Proxy(fmt.Sprintf("%s:%s", proxy.Hostname(), proxy.Port()))
 				} else {
-					useProxy = false
+					log.Println(err)
 				}
-			} else {
-				log.Println(err)
-				log.Println(proxyvalue)
 			}
 		}
 
@@ -361,10 +347,10 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 		MustConnect().
 		NoDefaultDevice()
 
-	if useProxy && proxy != nil && proxy.User != nil {
+	if proxy != nil && proxy.User != nil {
 		if username := proxy.User.Username(); username != "" {
 			password, _ := proxy.User.Password()
-			go browser.HandleAuth(username, password)()
+			go browser.MustHandleAuth(username, password)()
 		}
 	}
 
