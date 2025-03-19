@@ -74,6 +74,9 @@ type Model struct {
 
 	// Emulate mobile device
 	EmulateDevice uint8 `json:"emulate_device"`
+
+	// Static proxy
+	StaticProxy string
 }
 
 type BanFlags struct {
