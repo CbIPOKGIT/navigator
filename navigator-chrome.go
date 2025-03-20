@@ -328,14 +328,20 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 		l := launcher.New().Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
 		l = l.Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome)
 
+		var proxyvalue string
+
 		if navigator.PrxGetter != nil {
-			if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil && proxyvalue != "" {
-				if parsedProxy, err := url.Parse(proxyvalue); err == nil {
-					proxy = parsedProxy
-					l.Proxy(fmt.Sprintf("%s:%s", proxy.Hostname(), proxy.Port()))
-				} else {
-					log.Println(err)
-				}
+			if pv, err := navigator.PrxGetter.GetProxy(); err == nil && pv != "" {
+				proxyvalue = pv
+			}
+		} else if navigator.Model.StaticProxy != "" {
+			proxyvalue = navigator.Model.StaticProxy
+		}
+
+		if proxyvalue != "" {
+			if parsedProxy, err := url.Parse(proxyvalue); err == nil {
+				proxy = parsedProxy
+				l.Proxy(fmt.Sprintf("%s://%s:%s", proxy.Scheme, proxy.Hostname(), proxy.Port()))
 			}
 		}
 
