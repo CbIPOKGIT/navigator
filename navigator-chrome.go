@@ -211,11 +211,14 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 		}()
 	}
 
+	errNavChannle := make(chan error)
 	if len(url) > 0 {
 		time.Sleep(time.Millisecond * 10)
-		if err := navigator.Page.Navigate(url[0]); err != nil {
-			return err
-		}
+		go func() {
+			if err := navigator.Page.Navigate(url[0]); err != nil {
+				errNavChannle <- err
+			}
+		}()
 	}
 
 	var responsecode int
@@ -229,13 +232,14 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 	for {
 		select {
 
+		case err := <-errNavChannle:
+			return err
+
 		// Response recived
 		case responsecode = <-responserecived:
 			navigator.NavigateStatus = responsecode
-			log.Printf("Response code %d", responsecode)
 			isResponsed = true
 			go func() { checksuccess <- nil }()
-			timeout.Reset(time.Minute)
 
 		// Page loaded
 		case <-pageloaded:
