@@ -185,8 +185,6 @@ func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
 
 // Total rewrite of waitResponseAndLoad
 func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
-	defer handleErrorWithErrorChan(nil)
-
 	responserecived := make(chan int, 1)
 	pageloaded := make(chan error, 1)
 
@@ -356,7 +354,7 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	if proxy != nil && proxy.User != nil {
 		if username := proxy.User.Username(); username != "" {
 			password, _ := proxy.User.Password()
-			go browser.MustHandleAuth(username, password)()
+			go browser.HandleAuth(username, password)()
 		}
 	}
 
