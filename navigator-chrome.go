@@ -31,6 +31,11 @@ type ChromeNavigator struct {
 	Page    *rod.Page
 
 	ClfSolver CloudflareSolver
+
+	pageLoaded             chan error
+	networkResponseRecived chan int
+
+	launcher *launcher.Launcher
 }
 
 // Interface implementation
@@ -57,9 +62,13 @@ func (navigator *ChromeNavigator) closePage() error {
 func (navigator *ChromeNavigator) closeBrowser() error {
 	var err error = nil
 	if navigator.Browser != nil && !navigator.Model.UseSystemChrome {
-		err = navigator.Browser.Close()
+		// proto.BrowserCrash.Call(navigator.Browser)
+		if err = navigator.Browser.Close(); err != nil {
+			navigator.launcher.Kill()
+		}
 	}
 	navigator.Browser = nil
+	navigator.launcher = nil
 	return err
 }
 
@@ -185,27 +194,10 @@ func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
 
 // Total rewrite of waitResponseAndLoad
 func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
-	responserecived := make(chan int, 1)
-	pageloaded := make(chan error, 1)
-
-	go navigator.Page.EachEvent(func(e *proto.NetworkResponseReceived) (stop bool) {
-		if e.Type == proto.NetworkResourceTypeDocument {
-			responserecived <- e.Response.Status
-			return true
-		} else {
-			return false
-		}
-	})()
-
-	if navigator.Model.NavigationSelector == "" {
-		// Навігація
-		go navigator.Page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
-			pageloaded <- nil
-			return false
-		})()
+	if navigator.Model.NavigationSelector != "" {
 	} else {
 		go func() {
-			pageloaded <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
+			navigator.pageLoaded <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
 		}()
 	}
 
@@ -219,13 +211,13 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 		}()
 	}
 
-	var responsecode int
-	var isResponsed, isLoaded bool
-
-	checksuccess := make(chan any, 1)
+	checksuccess := make(chan any, 2)
 
 	// Ліміт часу на виконання операції. Або на отримання відповіді від сайту, або на завантаження сторінки
 	timeout := time.NewTimer(navigator.calculateNavigationTimeout())
+
+	var responsecode int
+	var isResponsed, isLoaded bool
 
 	for {
 		select {
@@ -234,20 +226,22 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 			return err
 
 		// Response recived
-		case responsecode = <-responserecived:
+		case responsecode = <-navigator.networkResponseRecived:
+			log.Println("Response recived", responsecode)
 			navigator.NavigateStatus = responsecode
 			isResponsed = true
 			go func() { checksuccess <- nil }()
 
 		// Page loaded
-		case <-pageloaded:
-			// log.Println("Page loaded")
+		case <-navigator.pageLoaded:
+			log.Println("Page loaded")
 			isLoaded = true
 			go func() { checksuccess <- nil }()
 
 		// Checking status
 		case <-checksuccess:
 			if isLoaded && isResponsed {
+				log.Println("Page loaded and response recived")
 				return nil
 			}
 
@@ -323,8 +317,8 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	}
 
 	if !useSystemChrome {
-		l := launcher.New().Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
-		l = l.Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome)
+		navigator.launcher = launcher.New().Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
+		navigator.launcher = navigator.launcher.Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome)
 
 		if navigator.PrxGetter != nil {
 			if proxyStr, err := navigator.PrxGetter.GetProxy(); err == nil {
@@ -336,10 +330,10 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 		}
 
 		if proxy != nil {
-			l.Proxy(fmt.Sprintf("%s://%s:%s", proxy.Scheme, proxy.Hostname(), proxy.Port()))
+			navigator.launcher.Proxy(fmt.Sprintf("%s://%s:%s", proxy.Scheme, proxy.Hostname(), proxy.Port()))
 		}
 
-		u, err = l.Launch()
+		u, err = navigator.launcher.Launch()
 	}
 
 	if err != nil {
@@ -410,6 +404,21 @@ func (navigator *ChromeNavigator) createPage() {
 			},10)  
 		`)
 	}
+
+	navigator.pageLoaded = make(chan error)
+	navigator.networkResponseRecived = make(chan int)
+	go navigator.Page.EachEvent(
+		func(e *proto.PageLoadEventFired) {
+			if navigator.Model.NavigationSelector == "" {
+				navigator.pageLoaded <- nil
+			}
+		},
+		func(e *proto.NetworkResponseReceived) {
+			if e.Type == proto.NetworkResourceTypeDocument {
+				navigator.networkResponseRecived <- e.Response.Status
+			}
+		},
+	)()
 }
 
 // Set cookies
