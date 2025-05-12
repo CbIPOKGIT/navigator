@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/devices"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/launcher/flags"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
 )
@@ -35,7 +38,7 @@ type ChromeNavigator struct {
 	pageLoaded             chan error
 	networkResponseRecived chan int
 
-	launcher *launcher.Launcher
+	pid uint32
 }
 
 // Interface implementation
@@ -62,13 +65,22 @@ func (navigator *ChromeNavigator) closePage() error {
 func (navigator *ChromeNavigator) closeBrowser() error {
 	var err error = nil
 	if navigator.Browser != nil && !navigator.Model.UseSystemChrome {
-		// proto.BrowserCrash.Call(navigator.Browser)
-		if err = navigator.Browser.Close(); err != nil {
-			navigator.launcher.Kill()
+
+		navigator.Browser.Close()
+
+		if navigator.pid > 0 {
+			if handle, err := syscall.OpenProcess(syscall.PROCESS_TERMINATE, true, navigator.pid); err == nil {
+				if err := syscall.TerminateProcess(handle, 0); err != nil {
+					log.Println("Error terminating process", navigator.pid, err)
+				}
+				syscall.CloseHandle(handle)
+			} else {
+				log.Println("Error opening process", navigator.pid, err)
+			}
 		}
 	}
 	navigator.Browser = nil
-	navigator.launcher = nil
+	navigator.pid = 0
 	return err
 }
 
@@ -194,13 +206,6 @@ func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
 
 // Total rewrite of waitResponseAndLoad
 func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
-	if navigator.Model.NavigationSelector != "" {
-	} else {
-		go func() {
-			navigator.pageLoaded <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
-		}()
-	}
-
 	errNavChannle := make(chan error)
 	if len(url) > 0 {
 		time.Sleep(time.Millisecond * 10)
@@ -208,6 +213,17 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 			if err := navigator.Page.Navigate(url[0]); err != nil {
 				errNavChannle <- err
 			}
+		}()
+	}
+	if navigator.Model.NavigationSelector != "" {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Println("Error in waitResponseAndLoad", r)
+					navigator.pageLoaded <- fmt.Errorf("%v", r)
+				}
+			}()
+			navigator.pageLoaded <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
 		}()
 	}
 
@@ -227,21 +243,24 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 
 		// Response recived
 		case responsecode = <-navigator.networkResponseRecived:
-			log.Println("Response recived", responsecode)
+			// log.Println("Response recived", responsecode)
 			navigator.NavigateStatus = responsecode
 			isResponsed = true
 			go func() { checksuccess <- nil }()
 
 		// Page loaded
-		case <-navigator.pageLoaded:
-			log.Println("Page loaded")
-			isLoaded = true
-			go func() { checksuccess <- nil }()
+		case err := <-navigator.pageLoaded:
+			if err == nil {
+				isLoaded = true
+				go func() { checksuccess <- nil }()
+			} else {
+				return err
+			}
 
 		// Checking status
 		case <-checksuccess:
 			if isLoaded && isResponsed {
-				log.Println("Page loaded and response recived")
+				// log.Println("Page loaded and response recived")
 				return nil
 			}
 
@@ -303,22 +322,31 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 	var u string
 	var err error
 
-	var useSystemChrome bool = navigator.Model.UseSystemChrome
-
 	var proxy *url.URL
 
 	// Пробуємо системний хром якщо потрібен.
 	// В випадку помилки будемо запускатись стандартно
-	if useSystemChrome {
-		u, err = launcher.NewUserMode().Launch()
-		if err != nil {
-			useSystemChrome = false
+	if navigator.Model.UseSystemChrome {
+		l := launcher.NewUserMode()
+
+		if dataDir := os.Getenv("CHROME_USER_DATA_DIR"); dataDir != "" {
+			l.Set(flags.UserDataDir, dataDir)
+		}
+
+		if u, err = l.Launch(); err != nil {
+			navigator.Model.UseSystemChrome = false
 		}
 	}
 
-	if !useSystemChrome {
-		navigator.launcher = launcher.New().Set("blink-settings", fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
-		navigator.launcher = navigator.launcher.Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome)
+	if !navigator.Model.UseSystemChrome {
+		l := launcher.New().
+			Set(
+				"blink-settings",
+				fmt.Sprintf("imagesEnabled=%t", navigator.Model.ShowImages))
+
+		l = l.Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome).
+			NoSandbox(true).
+			Leakless(true)
 
 		if navigator.PrxGetter != nil {
 			if proxyStr, err := navigator.PrxGetter.GetProxy(); err == nil {
@@ -330,10 +358,12 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 		}
 
 		if proxy != nil {
-			navigator.launcher.Proxy(fmt.Sprintf("%s://%s:%s", proxy.Scheme, proxy.Hostname(), proxy.Port()))
+			l.Proxy(fmt.Sprintf("%s://%s:%s", proxy.Scheme, proxy.Hostname(), proxy.Port()))
 		}
 
-		u, err = navigator.launcher.Launch()
+		if u, err = l.Launch(); err == nil {
+			navigator.pid = uint32(l.PID())
+		}
 	}
 
 	if err != nil {
