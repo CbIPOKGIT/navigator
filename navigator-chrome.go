@@ -411,6 +411,15 @@ func (navigator *ChromeNavigator) createPage() {
 
 	if navigator.ClfSolver != nil {
 		navigator.Page.MustEvalOnNewDocument(`
+			const originalAttachShadow = Element.prototype.attachShadow;
+			Element.prototype.attachShadow = function(init) {
+				// переписуємо на відкритий
+				init.mode = "open";
+				const shadow = originalAttachShadow.call(this, init);
+				this._shadowRoot = shadow; // додатково зберігаємо посилання
+				return shadow;
+			};
+
 			const i = setInterval(()=>{
 			if (window.turnstile) {
 				console.log('Turnstile found')
