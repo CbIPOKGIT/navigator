@@ -43,12 +43,12 @@ func (s *Solver) getCloudflareData(page *rod.Page) (string, bool, error) {
 	return "", false, errors.New("cloudflare data not found")
 }
 
-func (s *Solver) resolveToken(page *rod.Page, standalone bool, token string) error {
+func (s *Solver) resolveToken(page *rod.Page, standalone bool, token string, clfData map[string]any) error {
 	if standalone && s.scriptSolve != "" {
-		script := fmt.Sprintf(`async (response) => {
+		script := fmt.Sprintf(`async (response, clfData) => {
 			%s
 		}`, s.scriptSolve)
-		_, err := page.Eval(script, token)
+		_, err := page.Eval(script, token, clfData)
 		if err != nil {
 			return err
 		}
