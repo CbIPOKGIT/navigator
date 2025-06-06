@@ -35,9 +35,6 @@ type ChromeNavigator struct {
 
 	ClfSolver CloudflareSolver
 
-	pageLoaded             chan error
-	networkResponseRecived chan int
-
 	pid uint32
 }
 
@@ -206,6 +203,30 @@ func (navigator *ChromeNavigator) WaitTotalLoad(url ...string) error {
 
 // Total rewrite of waitResponseAndLoad
 func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
+	networkresponseRecived := make(chan int)
+	pageLoaded := make(chan error)
+
+	go navigator.Page.EachEvent(
+		func(e *proto.NetworkResponseReceived) bool {
+			if err := recover(); err != nil {
+				log.Println("Panic recovered")
+				return true
+			}
+			if e.Type == proto.NetworkResourceTypeDocument {
+				networkresponseRecived <- e.Response.Status
+				return true
+			} else {
+				return false
+			}
+		},
+		func(e *proto.PageLoadEventFired) bool {
+			if navigator.Model.NavigationSelector == "" {
+				pageLoaded <- nil
+			}
+			return true
+		},
+	)()
+
 	errNavChannle := make(chan error)
 	if len(url) > 0 {
 		time.Sleep(time.Millisecond * 10)
@@ -220,10 +241,10 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Println("Error in waitResponseAndLoad", r)
-					navigator.pageLoaded <- fmt.Errorf("%v", r)
+					pageLoaded <- fmt.Errorf("%v", r)
 				}
 			}()
-			navigator.pageLoaded <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
+			pageLoaded <- navigator.Page.Timeout(time.Minute).WaitElementsMoreThan(navigator.Model.NavigationSelector, 0)
 		}()
 	}
 
@@ -242,14 +263,15 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 			return err
 
 		// Response recived
-		case responsecode = <-navigator.networkResponseRecived:
-			// log.Println("Response recived", responsecode)
+		case responsecode = <-networkresponseRecived:
+			log.Println("Response recived", responsecode)
 			navigator.NavigateStatus = responsecode
 			isResponsed = true
 			go func() { checksuccess <- nil }()
 
 		// Page loaded
-		case err := <-navigator.pageLoaded:
+		case err := <-pageLoaded:
+			log.Println("Page loaded")
 			if err == nil {
 				isLoaded = true
 				go func() { checksuccess <- nil }()
@@ -260,7 +282,7 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 		// Checking status
 		case <-checksuccess:
 			if isLoaded && isResponsed {
-				// log.Println("Page loaded and response recived")
+				log.Println("Page loaded and response recived")
 				return nil
 			}
 
@@ -443,21 +465,6 @@ func (navigator *ChromeNavigator) createPage() {
 			},10)  
 		`)
 	}
-
-	navigator.pageLoaded = make(chan error)
-	navigator.networkResponseRecived = make(chan int)
-	go navigator.Page.EachEvent(
-		func(e *proto.PageLoadEventFired) {
-			if navigator.Model.NavigationSelector == "" {
-				navigator.pageLoaded <- nil
-			}
-		},
-		func(e *proto.NetworkResponseReceived) {
-			if e.Type == proto.NetworkResourceTypeDocument {
-				navigator.networkResponseRecived <- e.Response.Status
-			}
-		},
-	)()
 }
 
 // Set cookies
