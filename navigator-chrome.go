@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -34,8 +33,6 @@ type ChromeNavigator struct {
 	Page    *rod.Page
 
 	ClfSolver CloudflareSolver
-
-	pid uint32
 }
 
 // Interface implementation
@@ -64,20 +61,8 @@ func (navigator *ChromeNavigator) closeBrowser() error {
 	if navigator.Browser != nil && !navigator.Model.UseSystemChrome {
 
 		navigator.Browser.Close()
-
-		if navigator.pid > 0 {
-			if handle, err := syscall.OpenProcess(syscall.PROCESS_TERMINATE, true, navigator.pid); err == nil {
-				if err := syscall.TerminateProcess(handle, 0); err != nil {
-					log.Println("Error terminating process", navigator.pid, err)
-				}
-				syscall.CloseHandle(handle)
-			} else {
-				log.Println("Error opening process", navigator.pid, err)
-			}
-		}
 	}
 	navigator.Browser = nil
-	navigator.pid = 0
 	return err
 }
 
@@ -219,6 +204,8 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 				return false
 			}
 		},
+	)()
+	go navigator.Page.EachEvent(
 		func(e *proto.PageLoadEventFired) bool {
 			if navigator.Model.NavigationSelector == "" {
 				pageLoaded <- nil
@@ -248,10 +235,9 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 		}()
 	}
 
-	checksuccess := make(chan any, 2)
-
 	// Ліміт часу на виконання операції. Або на отримання відповіді від сайту, або на завантаження сторінки
 	timeout := time.NewTimer(navigator.calculateNavigationTimeout())
+	timeout.Reset(time.Second * 10)
 
 	var responsecode int
 	var isResponsed, isLoaded bool
@@ -267,23 +253,21 @@ func (navigator *ChromeNavigator) waitResponseAndLoad(url ...string) error {
 			log.Println("Response recived", responsecode)
 			navigator.NavigateStatus = responsecode
 			isResponsed = true
-			go func() { checksuccess <- nil }()
+			if isLoaded {
+				log.Println("Page loaded and response recived")
+				return nil
+			}
 
 		// Page loaded
 		case err := <-pageLoaded:
 			log.Println("Page loaded")
 			if err == nil {
-				isLoaded = true
-				go func() { checksuccess <- nil }()
+				if isResponsed {
+					log.Println("Page loaded and response recived")
+					return nil
+				}
 			} else {
 				return err
-			}
-
-		// Checking status
-		case <-checksuccess:
-			if isLoaded && isResponsed {
-				log.Println("Page loaded and response recived")
-				return nil
 			}
 
 		case <-timeout.C:
@@ -383,9 +367,7 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 			l.Proxy(fmt.Sprintf("%s://%s:%s", proxy.Scheme, proxy.Hostname(), proxy.Port()))
 		}
 
-		if u, err = l.Launch(); err == nil {
-			navigator.pid = uint32(l.PID())
-		}
+		u, err = l.Launch()
 	}
 
 	if err != nil {
