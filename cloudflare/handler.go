@@ -36,12 +36,13 @@ func (s *Solver) Solve(page *rod.Page) error {
 		}
 	}
 
-	task, err := s.createTask(data)
+	// task, err := s.createTask(data)
+	task, err := s.createCapMonsterTask(data)
 	if err != nil {
 		return err
 	}
 
-	token, err := s.getTaskResult(task)
+	token, err := s.getCapMonsterTaskResult(task)
 	if err != nil {
 		return err
 	}
