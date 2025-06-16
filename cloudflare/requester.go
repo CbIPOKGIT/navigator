@@ -29,7 +29,7 @@ type TwoCaptchaResultResponse struct {
 	} `json:"solution"`
 }
 
-func (s *Solver) createTask(taskData string) (uint64, error) {
+func (s *Solver) create2CaptchaTask(taskData string) (uint64, error) {
 	if s.apiKey == "" {
 		return 0, errors.New("apiKey is not set")
 	}
@@ -72,7 +72,7 @@ func (s *Solver) createTask(taskData string) (uint64, error) {
 	return response.Task, nil
 }
 
-func (s *Solver) getTaskResult(task uint64) (string, error) {
+func (s *Solver) get2CaptchaTaskResult(task uint64) (string, error) {
 	for i := 0; i < 12; i++ {
 		<-time.After(time.Second * 10)
 
