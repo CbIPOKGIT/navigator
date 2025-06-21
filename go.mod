@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.0
-	github.com/go-rod/rod v0.116.2
+	github.com/go-rod/rod v0.116.1
 	github.com/go-rod/stealth v0.4.9
 	gopkg.in/h2non/gentleman.v2 v2.0.5
 )
