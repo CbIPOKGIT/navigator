@@ -352,6 +352,7 @@ func (navigator *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 
 		l = l.Headless(!navigator.Model.Visible && !navigator.Model.UseSystemChrome).
 			NoSandbox(true).
+			Set("disable-web-security", "1").
 			Leakless(true)
 
 		if navigator.PrxGetter != nil {
