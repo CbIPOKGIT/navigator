@@ -90,11 +90,11 @@ func (navigator *ChromeNavigator) Evaluate(script string, args ...string) (strin
 
 func (navigator *ChromeNavigator) GetActualUrl() string {
 	if navigator.Page == nil {
-		return navigator.Url
+		navigator.GetUrl()
 	}
 	info, err := navigator.Page.Info()
 	if err != nil {
-		return navigator.Url
+		return navigator.GetUrl()
 	}
 	return info.URL
 }
@@ -126,7 +126,7 @@ func (navigator *ChromeNavigator) navigateUrl() error {
 			break
 		}
 
-		if err := navigator.WaitTotalLoad(navigator.Url); err != nil {
+		if err := navigator.WaitTotalLoad(navigator.GetUrl()); err != nil {
 			navigator.LastError = err
 			continue
 		}

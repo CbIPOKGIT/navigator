@@ -8,15 +8,13 @@ import (
 	"net/url"
 	"time"
 
-	"gopkg.in/h2non/gentleman.v2"
-	"gopkg.in/h2non/gentleman.v2/plugins/proxy"
-	gtls "gopkg.in/h2non/gentleman.v2/plugins/tls"
+	"resty.dev/v3"
 )
 
 type GentelmanNavigator struct {
 	CommonNavigator
 
-	Client *gentleman.Client
+	Client *resty.Client
 }
 
 func (navigator *GentelmanNavigator) Navigate(url string) error {
@@ -30,8 +28,17 @@ func (navigator *GentelmanNavigator) Navigate(url string) error {
 }
 
 func (navigator *GentelmanNavigator) Close() error {
-	navigator.destoyClient()
-	return nil
+	var err error = nil
+
+	if navigator.Client != nil {
+		err = navigator.Client.Close()
+		navigator.Client = nil
+	}
+	return err
+}
+
+func (navigator *GentelmanNavigator) GetActualUrl() string {
+	return navigator.GetUrl()
 }
 
 func (navigator *GentelmanNavigator) navigateUrl() error {
@@ -41,14 +48,9 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 		navigator.LastError = nil
 
 		if i > 0 {
-			navigator.destoyClient()
+			navigator.Close()
 		}
 		navigator.createClientIfNotExist()
-
-		request := navigator.Client.Request().URL(navigator.Url)
-		if navigator.Model.UserAgent != "" {
-			request.AddHeader("user-agent", navigator.Model.UserAgent)
-		}
 
 		if !navigator.JustCreated && navigator.Model.DelayBeforeNavigate > 0 {
 			time.Sleep(time.Second * time.Duration(navigator.Model.DelayBeforeNavigate))
@@ -56,14 +58,14 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 
 		navigator.JustCreated = false
 
-		response, err := request.Send()
+		response, err := navigator.Client.R().Get(navigator.Uri.String())
 		if err != nil {
 			log.Println(err)
 			navigator.LastError = errors.New("error navigate")
 			continue
 		}
 
-		navigator.NavigateStatus = response.StatusCode
+		navigator.NavigateStatus = response.StatusCode()
 
 		if err := navigator.СreateCrawlerFromHTML(response.String()); err != nil {
 			navigator.LastError = fmt.Errorf("error create crawler from HTML: %s", err.Error())
@@ -89,33 +91,26 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 		return
 	}
 
-	client := gentleman.New()
-	client.Use(gtls.Config(&tls.Config{InsecureSkipVerify: true}))
-	client.Context.Client.Timeout = navigator.calculateNavigationTimeout()
+	client := resty.New().
+		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+		SetTimeout(navigator.calculateNavigationTimeout())
 
 	if navigator.PrxGetter != nil {
 		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil && proxyvalue != "" {
 			if u, err := url.Parse(proxyvalue); err == nil {
-				client.Use(proxy.Set(map[string]string{
-					"http":  u.String(),
-					"https": u.String(),
-				}))
+				client.SetProxy(u.String())
 			}
 		}
-	} else {
-		client.Use(proxy.Set(map[string]string{}))
 	}
 
 	if len(navigator.Model.InitialCookies) > 0 {
-		client.AddCookies(navigator.Model.InitialCookies)
+		client.SetCookies(navigator.Model.InitialCookies)
+	}
+
+	if navigator.Model.UserAgent != "" {
+		client.SetHeader("User-Agent", navigator.Model.UserAgent)
 	}
 
 	navigator.Client = client
 	navigator.JustCreated = true
-}
-
-func (navigator *GentelmanNavigator) destoyClient() {
-	if navigator.Client != nil {
-		navigator.Client = nil
-	}
 }

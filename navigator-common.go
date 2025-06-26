@@ -3,8 +3,8 @@ package navigator
 import (
 	"bytes"
 	"fmt"
+	"net/url"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -12,22 +12,9 @@ import (
 
 const NAVIGATION_TRIES_COUNT int = 10
 
-var (
-	matchUrlHttp      *regexp.Regexp = regexp.MustCompile(`(?m)^https?:\/\/`)
-	matchUrlFromSlash *regexp.Regexp = regexp.MustCompile(`(?m)\/.*`)
-)
-
 // Common data for both navigators Chrome and Gentelman
 type CommonNavigator struct {
-
-	// Current url
-	Url string
-
-	// Current domen
-	Domen string
-
-	// Current protocol (HTTP, HTTPS)
-	Protocol string
+	Uri *url.URL
 
 	// Last navigate status
 	NavigateStatus int
@@ -84,11 +71,10 @@ func (navigator *CommonNavigator) SetProxyGetter(getter ProxyGetter) {
 }
 
 func (navigator *CommonNavigator) GetUrl() string {
-	return navigator.Url
-}
-
-func (navigator *CommonNavigator) GetActualUrl() string {
-	return navigator.Url
+	if navigator.Uri == nil {
+		return ""
+	}
+	return navigator.Uri.String()
 }
 
 // Метод інтерфейсу. Форматуємо лінк відносно поточного домену
@@ -98,19 +84,25 @@ func (navigator *CommonNavigator) FormatUrl(href string) string {
 	}
 
 	if regexp.MustCompile(`(?mi)^\?`).MatchString(href) {
-		currentUrlWithoutQuery := regexp.MustCompile(`(?mi)\?.*`).ReplaceAllString(navigator.Url, "")
+		currentUrl := ""
+		if navigator.Uri != nil {
+			currentUrl = fmt.Sprintf("%s://%s", navigator.Uri.Scheme, navigator.Uri.Path)
+		}
+		currentUrlWithoutQuery := regexp.MustCompile(`(?mi)\?.*`).ReplaceAllString(currentUrl, "")
 		return currentUrlWithoutQuery + href
 	}
 
-	protocol := navigator.Protocol
-	if protocol == "" {
-		protocol = "http"
+	protocol := "http"
+	host := ""
+	if navigator.Uri != nil {
+		protocol = navigator.Uri.Scheme
+		host = navigator.Uri.Host
 	}
 
 	if regexp.MustCompile(`(?mi)^/`).MatchString(href) {
-		return fmt.Sprintf("%s://%s%s", navigator.Protocol, navigator.Domen, href)
+		return fmt.Sprintf("%s://%s%s", protocol, host, href)
 	} else {
-		return fmt.Sprintf("%s://%s/%s", navigator.Protocol, navigator.Domen, href)
+		return fmt.Sprintf("%s://%s/%s", protocol, host, href)
 	}
 }
 
@@ -120,28 +112,14 @@ func (navigator *CommonNavigator) initEmptyCrawler() {
 }
 
 // Writing initial data before navigate
-func (navigator *CommonNavigator) writeAndFormatURL(url string) error {
-	navigator.Url = navigator.FormatUrl(url)
-
-	navigator.extractDomenName()
-	navigator.extractProtocol()
-
-	return nil
-}
-
-// Extract domen name from url
-func (navigator *CommonNavigator) extractDomenName() {
-	navigator.Domen = matchUrlHttp.ReplaceAllString(navigator.Url, "")
-	navigator.Domen = matchUrlFromSlash.ReplaceAllString(navigator.Domen, "")
-}
-
-// Extract protocol type from url
-func (navigator *CommonNavigator) extractProtocol() {
-	if protocol := regexp.MustCompile(`(?mi)^https?`).FindString(navigator.Url); protocol != "" {
-		navigator.Protocol = strings.ToLower(protocol)
+func (navigator *CommonNavigator) writeAndFormatURL(link string) error {
+	uri, err := url.Parse(navigator.FormatUrl(link))
+	if err == nil {
+		navigator.Uri = uri
 	} else {
-		navigator.Protocol = "http"
+		navigator.Uri = nil
 	}
+	return err
 }
 
 // Calculate how many tries we can navigate
