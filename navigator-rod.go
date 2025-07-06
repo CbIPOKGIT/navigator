@@ -561,7 +561,7 @@ func (n *ChromeNavigator) createChromium() (string, *url.URL, error) {
 		"blink-settings",
 		fmt.Sprintf("imagesEnabled=%t", n.Model.ShowImages))
 
-	l = l.Headless(false).
+	l = l.Headless(!n.Model.Visible).
 		NoSandbox(true).
 		Set("disable-web-security", "1")
 
