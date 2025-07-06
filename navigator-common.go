@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sync/atomic"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -17,7 +18,7 @@ type CommonNavigator struct {
 	Uri *url.URL
 
 	// Last navigate status
-	NavigateStatus int
+	NavigateStatus atomic.Int32
 
 	// Last navigate error
 	LastError error
@@ -47,15 +48,8 @@ func (navigator *CommonNavigator) SetModel(model *Model) {
 	navigator.Model = model
 }
 
-func (navigator *CommonNavigator) GetCrawler() *goquery.Document {
-	if navigator.Crawler == nil {
-		navigator.initEmptyCrawler()
-	}
-	return navigator.Crawler
-}
-
 func (navigator *CommonNavigator) GetNavigateStatus() int {
-	return navigator.NavigateStatus
+	return int(navigator.NavigateStatus.Load())
 }
 
 func (navigator *CommonNavigator) GetLastError() error {
@@ -160,7 +154,7 @@ func (navigator *CommonNavigator) СreateCrawlerFromHTML(html string) error {
 }
 
 // Valid repsponses 200 and 404
-func (navigator *CommonNavigator) isValidResponse(code int) bool {
+func (navigator *CommonNavigator) isValidResponse(code int32) bool {
 	return code == 200 || code == 404
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -16,56 +17,92 @@ const (
 type CloudflareSolver interface {
 	Is(*rod.Page) bool // check if page has Cloudflare protection
 
-	Solve(*rod.Page) error // solve Cloudflare protection
+	Solve(*rod.Page, ...context.Context) error // solve Cloudflare protection
 
 	SetSitekeyScript(string) // set script to get sitekey
 
 	SetSolveScript(string) // set script to solve challenge
+
+	SetReloadFunction(func() error) // set function to reload page
 }
 
 // beatChallange - beat the challange. Its something like Cloudflare protection.
 //
 // Max reloads count - 5
-func (n *ChromeNavigator) beatChallange() error {
+func (n *ChromeNavigator) beatChallange(response ...StateChannel) error {
+	state := &ChromeStateStatus{
+		Step: NAVIGATION_STATE_CHALLANGE_SOLVED,
+	}
+
+	defer writeToChromeStatusChannel(state, response...)
+
 	if n.ClfSolver != nil && n.ClfSolver.Is(n.Page) {
-		if err := n.ClfSolver.Solve(n.Page); err == nil {
-			n.NavigateStatus = 200
-			return nil
-		} else {
-			return err
-		}
+		state.Error = n.solveWithClfSolver()
+	} else {
+		state.Error = n.solveSimpleChallange()
 	}
+	return state.Error
+}
 
-	if !n.hasChallenge() {
-		return nil
-	}
-
+func (n *ChromeNavigator) solveWithClfSolver() error {
 	errChannel := make(chan error, 1)
-	go n.waitReloads(errChannel)
+
+	go func() {
+		errChannel <- n.ClfSolver.Solve(n.Page, n.context)
+	}()
 
 	select {
 	case err := <-errChannel:
+		if err == nil {
+			log.Println("Challenge solved with Cloudflare solver")
+		} else {
+			log.Println("Error solving challenge with Cloudflare solver:", err)
+		}
 		return err
-	case <-time.After(CHALLENGE_SOLVE_DURATION):
-		return errors.New("timeout challenge solve")
+	case <-n.context.Done():
+		return errors.New("context canceled")
+
 	}
 }
 
-func (n *ChromeNavigator) waitReloads(response chan error) {
-	var step int = 0
+func (n *ChromeNavigator) solveSimpleChallange() error {
+	if !n.hasChallenge() {
+		log.Println("No challange")
+		return nil
+	}
 
-	for step < 5 {
-		if !n.hasChallenge() {
-			log.Println("No challange")
-			response <- nil
-			return
-		} else {
-			log.Println("Challenge detected. Try to solve it.")
-		}
+	log.Println("Challenge detected, starting to solve...")
+	maxStepCount := 5
+	reloaded := make(chan error)
+	contextChallenge, _ := context.WithTimeout(n.context, CHALLENGE_SOLVE_DURATION)
 
-		if err := n.waitResponseAndLoad(); err != nil {
-			response <- err
-			return
+	reloadFunc := func() { reloaded <- n.WaitResponseAndLoad(contextChallenge) }
+	go reloadFunc()
+
+	for {
+		select {
+		case <-contextChallenge.Done():
+			return errors.New("timeout challenge solve")
+
+		case err := <-reloaded:
+			if err != nil {
+				log.Println("Error reloading page:", err)
+				return err
+			}
+
+			if !n.hasChallenge() {
+				log.Println("Challenge solved")
+				return nil
+			}
+
+			maxStepCount--
+			if maxStepCount <= 0 {
+				log.Println("Max step count reached. Challenge not solved.")
+				return errors.New("max step count reached")
+			} else {
+				log.Printf("Challenge not solved. Step %d/%d", 5-maxStepCount, 5)
+				go reloadFunc()
+			}
 		}
 	}
 }

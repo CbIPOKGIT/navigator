@@ -1,65 +1,107 @@
 package cloudflare
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
+	"time"
 
 	"github.com/go-rod/rod"
 )
 
-func (s *Solver) Solve(page *rod.Page) error {
-	page.Activate()
+func (s *Solver) Solve(page *rod.Page, ctxs ...context.Context) error {
+	ctx := context.Background()
+	if len(ctxs) > 0 {
+		for _, c := range ctxs {
+			ctx = context.WithoutCancel(c)
+		}
+	}
 
-	data, standalone, err := s.getCloudflareData(page)
+	clfResponse := make(chan *CloudflareData, 1)
+	var clfData *CloudflareData
+	go s.getCloudflareData(page, clfResponse)
+
+	select {
+	case <-ctx.Done():
+		return errors.New("context canceled")
+
+	case d, e := <-clfResponse:
+		if !e {
+			return errors.New("failed to get cloudflare data")
+		} else {
+			clfData = d
+		}
+	}
+
+	if clfData == nil {
+		return errors.New("cloudflare data is nil")
+	}
+
+	task, err := s.createOrder(clfData.Data)
 	if err != nil {
 		return err
 	}
 
-	clfData := make(map[string]any)
-
-	if standalone {
-		el, err := page.Search(".main-wrapper")
-		if err != nil {
-			return err
-		}
-
-		if el == nil {
-			return errors.New("cloudflare: main-wrapper element not found")
-		}
-		data, err := el.First.Eval(`() => JSON.stringify(window._cf_chl_opt)`)
-		if err != nil {
-			return err
-		}
-
-		if err := json.Unmarshal([]byte(data.Value.Str()), &clfData); err != nil {
-			return err
-		}
+	token, err := s.getAnswer(task, ctx)
+	if err != nil {
+		return err
 	}
 
-	var token string
-	var errToken error
+	return s.resolveToken(page, clfData.Standalone, token, nil)
+}
 
+func (s *Solver) createOrder(taskData string) (uint64, error) {
 	switch s.solverType {
 	case CLOUDFLARE_SOLVER_2CAPTCHA:
-		if task, err := s.create2CaptchaTask(data); err == nil {
-			token, errToken = s.get2CaptchaTaskResult(task)
+		if t, err := s.create2CaptchaTask(taskData); err == nil {
+			return t, nil
 		} else {
-			errToken = err
+			return 0, err
 		}
 
 	case CLOUDFLARE_SOLVER_CAP_MONSTER:
-		if task, err := s.createCapMonsterTask(data); err == nil {
-			token, errToken = s.getCapMonsterTaskResult(task)
+		if t, err := s.createCapMonsterTask(taskData); err == nil {
+			return t, nil
 		} else {
-			errToken = err
+			return 0, err
 		}
 	default:
-		errToken = errors.New("unknown solver type")
+		return 0, errors.New("unknown solver type")
+	}
+}
+
+func (s *Solver) getAnswer(taskID uint64, ctx context.Context) (string, error) {
+	var step int = 0
+	interval := time.NewTimer(time.Second * 10)
+
+	var requester func(uint64) (string, error)
+
+	switch s.solverType {
+	case CLOUDFLARE_SOLVER_2CAPTCHA:
+		requester = s.get2CaptchaTaskResult
+	case CLOUDFLARE_SOLVER_CAP_MONSTER:
+		requester = s.getCapMonsterTaskResult
 	}
 
-	if errToken != nil {
-		return errToken
-	}
+	for {
+		select {
+		case <-ctx.Done():
+			return "", errors.New("context canceled")
 
-	return s.resolveToken(page, standalone, token, clfData)
+		case <-interval.C:
+			step++
+			if step > 12 {
+				return "", errors.New("token solve timeout")
+			}
+
+			answer, err := requester(taskID)
+			if err != nil {
+				return "", err
+			}
+			if answer != "" {
+				return answer, nil
+			}
+
+			interval.Reset(time.Second * 10)
+		}
+	}
 }

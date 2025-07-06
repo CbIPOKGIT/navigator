@@ -9,9 +9,15 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 )
 
-func (s *Solver) getCloudflareData(page *rod.Page) (string, bool, error) {
+type CloudflareData struct {
+	Data       string
+	Standalone bool
+}
 
-	for i := 0; i < 10; i++ {
+func (s *Solver) getCloudflareData(page *rod.Page, response chan *CloudflareData) (string, bool, error) {
+	defer close(response)
+
+	for range 10 {
 		page.Activate()
 
 		time.Sleep(time.Second)
@@ -20,6 +26,7 @@ func (s *Solver) getCloudflareData(page *rod.Page) (string, bool, error) {
 		if err == nil {
 			dataValue := data.Value.String()
 			if len(dataValue) > 100 {
+				response <- &CloudflareData{Data: dataValue, Standalone: false}
 				return dataValue, false, nil
 			}
 		} else if s.scriptSitekey != "" {
@@ -29,7 +36,9 @@ func (s *Solver) getCloudflareData(page *rod.Page) (string, bool, error) {
 			dataValue, errValue := page.Eval(script)
 
 			if errValue == nil {
-				return dataValue.Value.Str(), true, nil
+				value := dataValue.Value.Str()
+				response <- &CloudflareData{Data: value, Standalone: false}
+				return value, true, nil
 			}
 		}
 
@@ -45,7 +54,7 @@ func (s *Solver) getCloudflareData(page *rod.Page) (string, bool, error) {
 
 func (s *Solver) resolveToken(page *rod.Page, standalone bool, token string, clfData map[string]any) error {
 	if standalone && s.scriptSolve != "" {
-		script := fmt.Sprintf(`async (response, clfData) => {
+		script := fmt.Sprintf(`async (response, clfData = {}) => {
 			%s
 		}`, s.scriptSolve)
 		_, err := page.Eval(script, token, clfData)
@@ -56,6 +65,10 @@ func (s *Solver) resolveToken(page *rod.Page, standalone bool, token string, clf
 		if _, err := page.Eval(`token => tsCallback(token)`, token); err != nil {
 			return err
 		}
+	}
+
+	if s.reloadFunction != nil {
+		return s.reloadFunction()
 	}
 
 	return s.waitReload(page)

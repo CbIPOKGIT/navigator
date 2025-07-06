@@ -20,6 +20,9 @@ type Solver struct {
 
 	// Сервіс для розв'язання капчі
 	solverType uint8
+
+	// Функція для очікування перезавантаження сторінки
+	reloadFunction func() error
 }
 
 func New(apiKey string) *Solver {
@@ -58,4 +61,8 @@ func (s *Solver) SetSolveScript(script string) {
 func (s *Solver) SetSolverType(solverType uint8) *Solver {
 	s.solverType = solverType
 	return s
+}
+
+func (s *Solver) SetReloadFunction(reloadFunc func() error) {
+	s.reloadFunction = reloadFunc
 }

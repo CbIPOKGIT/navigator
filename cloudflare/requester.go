@@ -126,10 +126,9 @@ func (s *Solver) createCapMonsterTask(taskData string) (uint64, error) {
 		return 0, err
 	}
 
-	task["type"] = "TurnstileTask"
+	task["cloudflareTaskType"] = "token"
+	task["pageAction"] = "managed"
 	task["pageData"] = task["pagedata"]
-	task["cloudflareTaskType"] = task["token"]
-	// task["pageAction"] = task["managed"]
 
 	body := &TwoCaptchaTaskBody{
 		Key:  s.apiKey,

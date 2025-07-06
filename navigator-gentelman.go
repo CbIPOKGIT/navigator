@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"resty.dev/v3"
 )
 
@@ -25,6 +26,13 @@ func (navigator *GentelmanNavigator) Navigate(url string) error {
 	navigator.initEmptyCrawler()
 
 	return navigator.navigateUrl()
+}
+
+func (navigator *CommonNavigator) GetCrawler() *goquery.Document {
+	if navigator.Crawler == nil {
+		navigator.initEmptyCrawler()
+	}
+	return navigator.Crawler
 }
 
 func (navigator *GentelmanNavigator) Close() error {
@@ -65,14 +73,14 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 			continue
 		}
 
-		navigator.NavigateStatus = response.StatusCode()
+		navigator.NavigateStatus.Store(int32(response.StatusCode()))
 
 		if err := navigator.СreateCrawlerFromHTML(response.String()); err != nil {
 			navigator.LastError = fmt.Errorf("error create crawler from HTML: %s", err.Error())
 			continue
 		}
 
-		if navigator.isValidResponse(navigator.NavigateStatus) {
+		if navigator.isValidResponse(navigator.NavigateStatus.Load()) {
 			navigator.NoMoreTry = false
 			break
 		}

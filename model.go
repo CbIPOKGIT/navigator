@@ -24,6 +24,9 @@ type Model struct {
 	// Use browser from OS or own
 	UseSystemChrome bool `json:"use_system_chrome"`
 
+	// Special launch of chromium with maximum bot undetection
+	LaunchStealth bool `json:"launch_stealth"`
+
 	// Event wich need to fire, that we would know the page is loaded enought
 	NavigationWaitfor int `json:"navigation_waitfor"`
 
