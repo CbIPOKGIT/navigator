@@ -269,13 +269,6 @@ func (n *ChromeNavigator) gotoUrl(url string, response ...StateChannel) error {
 
 	defer writeToChromeStatusChannel(state, response...)
 
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		state.Error = fmt.Errorf("navigation panic: %v", r)
-	// 		log.Println("Recovered from panic during navigation:", state.Error)
-	// 	}
-	// }()
-
 	if err := n.createClientIfNeed(); err != nil {
 		state.Error = err
 		return err

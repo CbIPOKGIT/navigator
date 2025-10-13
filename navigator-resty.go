@@ -111,6 +111,10 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 		}
 	}
 
+	if navigator.Model.BlockRedirects {
+		client.SetRedirectPolicy(resty.NoRedirectPolicy())
+	}
+
 	if len(navigator.Model.InitialCookies) > 0 {
 		client.SetCookies(navigator.Model.InitialCookies)
 	}
