@@ -77,6 +77,9 @@ type Model struct {
 
 	// Emulate mobile device
 	EmulateDevice uint8 `json:"emulate_device"`
+
+	// Block redirects
+	BlockRedirects bool `json:"block_redirects"`
 }
 
 type BanFlags struct {
