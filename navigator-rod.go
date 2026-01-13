@@ -466,6 +466,7 @@ func (n *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 		MustConnect().
 		NoDefaultDevice()
 
+	n.CurrentProxy = proxy
 	if proxy != nil && proxy.User != nil {
 		if username := proxy.User.Username(); username != "" {
 			password, _ := proxy.User.Password()

@@ -1,6 +1,10 @@
 package navigator
 
-import "github.com/PuerkitoBio/goquery"
+import (
+	"net/url"
+
+	"github.com/PuerkitoBio/goquery"
+)
 
 type Navigator interface {
 	// Передаэмо модель парсингу
@@ -37,6 +41,9 @@ type Navigator interface {
 
 	// Форматуємо лінк відносно поточного домену
 	FormatUrl(string) string
+
+	// Отримати поточний проксі
+	GetCurrentProxy() *url.URL
 
 	// Записуємо необхідні куки
 	// name, value, maxage стандартні поля для http.Cookie{}

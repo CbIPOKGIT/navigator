@@ -40,6 +40,8 @@ type CommonNavigator struct {
 
 	// Check if this a just created client and only first URL
 	JustCreated bool
+
+	CurrentProxy *url.URL
 }
 
 // Interface method implementation
@@ -98,6 +100,11 @@ func (navigator *CommonNavigator) FormatUrl(href string) string {
 	} else {
 		return fmt.Sprintf("%s://%s/%s", protocol, host, href)
 	}
+}
+
+// Метод інтерфейсу. Повертаємо поточний проксі або nil
+func (navigator *CommonNavigator) GetCurrentProxy() *url.URL {
+	return navigator.CurrentProxy
 }
 
 // Initialize empty crawler

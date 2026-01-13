@@ -103,10 +103,12 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetTimeout(navigator.calculateNavigationTimeout())
 
+	navigator.CurrentProxy = nil
 	if navigator.PrxGetter != nil {
 		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil && proxyvalue != "" {
 			if u, err := url.Parse(proxyvalue); err == nil {
 				client.SetProxy(u.String())
+				navigator.CurrentProxy = u
 			}
 		}
 	}
