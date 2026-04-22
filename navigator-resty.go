@@ -108,6 +108,17 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 		if proxyvalue, err := navigator.PrxGetter.GetProxy(); err == nil && proxyvalue != "" {
 			if u, err := url.Parse(proxyvalue); err == nil {
 				client.SetProxy(u.String())
+
+				if u.User != nil {
+					username := u.User.Username()
+					password, _ := u.User.Password()
+
+					if username != "" && password != "" {
+						client.SetBasicAuth(username, password)
+					}
+
+				}
+
 				navigator.CurrentProxy = u
 			}
 		}
