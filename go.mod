@@ -1,13 +1,13 @@
 module github.com/CbIPOKGIT/navigator
 
-go 1.23
+go 1.23.0
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.0
 	github.com/go-rod/rod v0.116.2
 	github.com/go-rod/stealth v0.4.9
-	golang.org/x/net v0.33.0
-	resty.dev/v3 v3.0.0-beta.3
+	golang.org/x/net v0.43.0
+	resty.dev/v3 v3.0.0-beta.6
 )
 
 require (
