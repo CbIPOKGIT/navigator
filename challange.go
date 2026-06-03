@@ -36,6 +36,12 @@ func (n *ChromeNavigator) beatChallange(response ...StateChannel) error {
 
 	defer writeToChromeStatusChannel(state, response...)
 
+	defer func() {
+		if r := recover(); r != nil {
+			state.Error = errors.New("panic")
+		}
+	}()
+
 	if n.ClfSolver != nil && n.ClfSolver.Is(n.Page) {
 		state.Error = n.solveWithClfSolver()
 	} else {

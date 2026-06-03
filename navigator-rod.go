@@ -262,12 +262,17 @@ func (n *ChromeNavigator) createContextIfNeed() {
 
 // gotoUrl переходить на вказану URL-адресу
 func (n *ChromeNavigator) gotoUrl(url string, response ...StateChannel) error {
-
 	state := &ChromeStateStatus{
 		Step: NAVIGATION_STATE_NAVIGATED,
 	}
 
 	defer writeToChromeStatusChannel(state, response...)
+
+	defer func() {
+		if r := recover(); r != nil {
+			state.Error = errors.New("panic")
+		}
+	}()
 
 	if err := n.createClientIfNeed(); err != nil {
 		state.Error = err
@@ -660,6 +665,12 @@ func (n *ChromeNavigator) delayBeforeRead(response ...StateChannel) {
 
 	defer writeToChromeStatusChannel(state, response...)
 
+	defer func() {
+		if r := recover(); r != nil {
+			state.Error = errors.New("panic")
+		}
+	}()
+
 	if n.Model.DelayBeforeRead == 0 {
 		log.Println("No delay before read, skipping")
 		return
@@ -683,6 +694,12 @@ func (n *ChromeNavigator) solveCaptcha(response ...StateChannel) error {
 	}
 
 	defer writeToChromeStatusChannel(state, response...)
+
+	defer func() {
+		if r := recover(); r != nil {
+			state.Error = errors.New("panic")
+		}
+	}()
 
 	if n.Model.CaptchaSelector == "" || n.CptchSolver == nil {
 		log.Println("No captcha selector or solver provided, skipping captcha solving")
