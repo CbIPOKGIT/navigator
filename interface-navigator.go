@@ -39,6 +39,8 @@ type Navigator interface {
 	// Set proxy getter
 	SetProxyGetter(ProxyGetter)
 
+	SetProxyLogger(ProxyLogger)
+
 	// Форматуємо лінк відносно поточного домену
 	FormatUrl(string) string
 

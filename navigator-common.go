@@ -13,6 +13,10 @@ import (
 
 const NAVIGATION_TRIES_COUNT int = 10
 
+type ProxyLogger interface {
+	LogProxy(proxy string, url string, status int32, err error)
+}
+
 // Common data for both navigators Chrome and Gentelman
 type CommonNavigator struct {
 	Uri *url.URL
@@ -42,6 +46,8 @@ type CommonNavigator struct {
 	JustCreated bool
 
 	CurrentProxy *url.URL
+
+	proxyLogger ProxyLogger
 }
 
 // Interface method implementation
@@ -66,6 +72,10 @@ func (navigator *CommonNavigator) SetProxyGetter(getter ProxyGetter) {
 	navigator.PrxGetter = getter
 }
 
+func (navigator *CommonNavigator) SetProxyLogger(logger ProxyLogger) {
+	navigator.proxyLogger = logger
+}
+
 func (navigator *CommonNavigator) GetUrl() string {
 	if navigator.Uri == nil {
 		return ""
@@ -82,7 +92,7 @@ func (navigator *CommonNavigator) FormatUrl(href string) string {
 	if regexp.MustCompile(`(?mi)^\?`).MatchString(href) {
 		currentUrl := ""
 		if navigator.Uri != nil {
-			currentUrl = fmt.Sprintf("%s://%s", navigator.Uri.Scheme, navigator.Uri.Path)
+			currentUrl = fmt.Sprintf("%s://%s%s", navigator.Uri.Scheme, navigator.Uri.Host, navigator.Uri.Path)
 		}
 		currentUrlWithoutQuery := regexp.MustCompile(`(?mi)\?.*`).ReplaceAllString(currentUrl, "")
 		return currentUrlWithoutQuery + href
@@ -170,5 +180,11 @@ func (navigator *CommonNavigator) calculateNavigationTimeout() time.Duration {
 		return time.Duration(navigator.Model.NavigationTimeout) * time.Second
 	} else {
 		return time.Duration(time.Minute)
+	}
+}
+
+func (navigator *CommonNavigator) logRequest(status int32, err error) {
+	if navigator.proxyLogger != nil && navigator.CurrentProxy != nil {
+		navigator.proxyLogger.LogProxy(navigator.CurrentProxy.String(), navigator.GetUrl(), status, err)
 	}
 }

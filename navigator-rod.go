@@ -316,6 +316,7 @@ func (n *ChromeNavigator) gotoUrl(url string, response ...StateChannel) error {
 
 	case err := <-errNavigate:
 		state.Error = err
+		n.logRequest(n.NavigateStatus.Load(), err)
 		return err
 	}
 }
@@ -676,12 +677,19 @@ func (n *ChromeNavigator) delayBeforeRead(response ...StateChannel) {
 		return
 	}
 
+	var delayDuration time.Duration
+	if n.Model.DelayBeforeRead < 20 {
+		delayDuration = time.Duration(n.Model.DelayBeforeRead) * time.Second
+	} else {
+		delayDuration = time.Duration(n.Model.DelayBeforeRead) * time.Millisecond
+	}
+
 	select {
 	case <-n.context.Done():
 		state.Error = errors.New("navigation cancelled")
 		return
 
-	case <-time.After(time.Duration(n.Model.DelayBeforeRead) * time.Second):
+	case <-time.After(delayDuration):
 		log.Printf("Delay before read completed after %d seconds", n.Model.DelayBeforeRead)
 		return
 	}

@@ -69,11 +69,14 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 		response, err := navigator.Client.R().Get(navigator.Uri.String())
 		if err != nil {
 			log.Println(err)
+			navigator.logRequest(0, err)
 			navigator.LastError = errors.New("error navigate")
 			continue
 		}
 
-		navigator.NavigateStatus.Store(int32(response.StatusCode()))
+		statusCode := int32(response.StatusCode())
+		navigator.NavigateStatus.Store(statusCode)
+		navigator.logRequest(statusCode, err)
 
 		if err := navigator.СreateCrawlerFromHTML(response.String()); err != nil {
 			navigator.LastError = fmt.Errorf("error create crawler from HTML: %s", err.Error())
