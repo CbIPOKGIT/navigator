@@ -80,6 +80,28 @@ type Model struct {
 
 	// Block redirects
 	BlockRedirects bool `json:"block_redirects"`
+
+	Authorization *Authorization `json:"authorization"`
+}
+
+type Authorization struct {
+	Use       bool `json:"use"`
+	UseScript bool `json:"use_script"` // Авторизація за допомогою скрипта
+
+	AuthorizationScript *string `json:"authorization_script"` // Скрипт для авторизації
+
+	FormSelector string `json:"form_selector"` // Авторизація за допомогою форми. Селектор форми
+
+	Fields []*AuthorizationCredentials `json:"fields"` // Поля для авторизації у формі
+
+	SubmitAddr string `json:"submit_addr"` // Адреса для відправки форми. Якщо не вказано - беремо з атрибуту форми
+
+	WaitReload bool `json:"wait_reload"` // Чекати перезавантаження після відправки форми
+}
+
+type AuthorizationCredentials struct {
+	Name     string `json:"name"`     // Назва поля для авторизації
+	Value    string `json:"value"`    // Значення для заповнення поля
 }
 
 type BanFlags struct {

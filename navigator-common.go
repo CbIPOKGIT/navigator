@@ -48,6 +48,9 @@ type CommonNavigator struct {
 	CurrentProxy *url.URL
 
 	proxyLogger ProxyLogger
+
+	// Прапорець, що показує чи вже виконана авторизація в межах поточної сесії клієнта
+	isAuthorized atomic.Bool
 }
 
 // Interface method implementation
@@ -187,4 +190,11 @@ func (navigator *CommonNavigator) logRequest(status int32, err error) {
 	if navigator.proxyLogger != nil && navigator.CurrentProxy != nil {
 		navigator.proxyLogger.LogProxy(navigator.CurrentProxy.String(), navigator.GetUrl(), status, err)
 	}
+}
+
+func (navigator *CommonNavigator) needAuthorization() bool {
+	return navigator.Model != nil &&
+		navigator.Model.Authorization != nil &&
+		navigator.Model.Authorization.Use &&
+		!navigator.isAuthorized.Load()
 }

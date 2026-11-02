@@ -37,6 +37,7 @@ const (
 	EXECUTOR_EMPTY_LOAD
 	EXECUTOR_BEAT_CHALLENGE
 	EXECUTOR_SOLVE_CAPTCHA
+	EXECUTOR_AUTHORIZE
 	EXECUTOR_VALIDATE_RESPONSE
 )
 
@@ -195,6 +196,13 @@ func (n *ChromeNavigator) buildExecutorsLocked() {
 		executors = append(executors, StepExecutor{
 			Step: EXECUTOR_SOLVE_CAPTCHA,
 			Exec: n.stepSolveCaptcha,
+		})
+	}
+
+	if n.Model.Authorization != nil && n.Model.Authorization.Use {
+		executors = append(executors, StepExecutor{
+			Step: EXECUTOR_AUTHORIZE,
+			Exec: n.stepAuthorize,
 		})
 	}
 
@@ -697,6 +705,7 @@ func (n *ChromeNavigator) closeClient() (err error) {
 	n.Page = nil
 	cmd := n.cmd
 	n.cmd = nil
+	n.isAuthorized.Store(false)
 	useSystemChrome := n.Model != nil && n.Model.UseSystemChrome
 	n.mu.Unlock()
 
@@ -754,6 +763,7 @@ func (n *ChromeNavigator) createClientIfNeed() error {
 
 	n.setPage(page)
 	n.JustCreated = true
+	n.isAuthorized.Store(false)
 
 	if n.Model != nil && len(n.Model.InitialCookies) > 0 {
 		n.SetCookies(n.Model.InitialCookies)

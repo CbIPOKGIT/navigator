@@ -38,6 +38,8 @@ func (navigator *CommonNavigator) GetCrawler() *goquery.Document {
 func (navigator *GentelmanNavigator) Close() error {
 	var err error = nil
 
+	navigator.isAuthorized.Store(false)
+
 	if navigator.Client != nil {
 		err = navigator.Client.Close()
 		navigator.Client = nil
@@ -81,6 +83,13 @@ func (navigator *GentelmanNavigator) navigateUrl() error {
 		if err := navigator.СreateCrawlerFromHTML(response.String()); err != nil {
 			navigator.LastError = fmt.Errorf("error create crawler from HTML: %s", err.Error())
 			continue
+		}
+
+		if navigator.needAuthorization() {
+			if err := navigator.authorizeResty(); err != nil {
+				navigator.LastError = err
+				continue
+			}
 		}
 
 		if navigator.isValidResponse(navigator.NavigateStatus.Load()) {
@@ -141,4 +150,5 @@ func (navigator *GentelmanNavigator) createClientIfNotExist() {
 
 	navigator.Client = client
 	navigator.JustCreated = true
+	navigator.isAuthorized.Store(false)
 }
