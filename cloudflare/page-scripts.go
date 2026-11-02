@@ -14,16 +14,25 @@ type CloudflareData struct {
 	Standalone bool
 }
 
-func (s *Solver) getCloudflareData(page *rod.Page, response chan *CloudflareData) (string, bool, error) {
+func (s *Solver) getCloudflareData(page *rod.Page, response chan *CloudflareData) (dataStr string, standalone bool, err error) {
 	defer close(response)
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New("panic getting cloudflare data")
+		}
+	}()
+
+	if page == nil {
+		return "", false, errors.New("page is nil")
+	}
 
 	for range 10 {
-		page.Activate()
+		_, _ = page.Activate()
 
 		time.Sleep(time.Second)
 
 		data, err := page.Eval(`() => cloudflareData`)
-		if err == nil {
+		if err == nil && data != nil {
 			dataValue := data.Value.String()
 			if len(dataValue) > 100 {
 				response <- &CloudflareData{Data: dataValue, Standalone: false}
@@ -35,14 +44,14 @@ func (s *Solver) getCloudflareData(page *rod.Page, response chan *CloudflareData
 			}`, s.scriptSitekey)
 			dataValue, errValue := page.Eval(script)
 
-			if errValue == nil {
+			if errValue == nil && dataValue != nil {
 				value := dataValue.Value.Str()
 				response <- &CloudflareData{Data: value, Standalone: false}
 				return value, true, nil
 			}
 		}
 
-		page.Reload()
+		_ = page.Reload()
 		if err := s.waitReload(page); err != nil {
 			return "", false, err
 		}
@@ -52,7 +61,17 @@ func (s *Solver) getCloudflareData(page *rod.Page, response chan *CloudflareData
 	return "", false, errors.New("cloudflare data not found")
 }
 
-func (s *Solver) resolveToken(page *rod.Page, standalone bool, token string, clfData map[string]any) error {
+func (s *Solver) resolveToken(page *rod.Page, standalone bool, token string, clfData map[string]any) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New("panic resolving token")
+		}
+	}()
+
+	if page == nil {
+		return errors.New("page is nil")
+	}
+
 	if standalone && s.scriptSolve != "" {
 		script := fmt.Sprintf(`async (response, clfData = {}) => {
 			%s
@@ -75,17 +94,32 @@ func (s *Solver) resolveToken(page *rod.Page, standalone bool, token string, clf
 }
 
 func (s *Solver) waitReload(page *rod.Page) error {
+	if page == nil {
+		return errors.New("page is nil")
+	}
+
 	loaded := make(chan any, 1)
 
-	go page.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
-		loaded <- nil
-		return false
-	})()
+	go func(p *rod.Page) {
+		defer func() {
+			recover()
+		}()
+		p.EachEvent(func(e *proto.PageLoadEventFired) (stop bool) {
+			select {
+			case loaded <- nil:
+			default:
+			}
+			return true
+		})()
+	}(page)
+
+	timer := time.NewTimer(time.Second * 60)
+	defer timer.Stop()
 
 	select {
 	case <-loaded:
 		return nil
-	case <-time.After(time.Second * 60):
+	case <-timer.C:
 		return errors.New("timeout waiting for page to load")
 	}
 }

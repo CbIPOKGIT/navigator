@@ -9,10 +9,16 @@ import (
 )
 
 func (s *Solver) Solve(page *rod.Page, ctxs ...context.Context) error {
+	if page == nil {
+		return errors.New("page is nil")
+	}
+
 	ctx := context.Background()
 	if len(ctxs) > 0 {
 		for _, c := range ctxs {
-			ctx = context.WithoutCancel(c)
+			if c != nil {
+				ctx = c
+			}
 		}
 	}
 
@@ -72,6 +78,7 @@ func (s *Solver) createOrder(taskData string) (uint64, error) {
 func (s *Solver) getAnswer(taskID uint64, ctx context.Context) (string, error) {
 	var step int = 0
 	interval := time.NewTimer(time.Second * 10)
+	defer interval.Stop()
 
 	var requester func(uint64) (string, error)
 

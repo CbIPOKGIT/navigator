@@ -1,12 +1,12 @@
 package navigator
 
 import (
+	"context"
 	"errors"
 	"log"
 	"time"
 
 	"github.com/go-rod/rod"
-	"golang.org/x/net/context"
 )
 
 const (
@@ -29,33 +29,48 @@ type CloudflareSolver interface {
 // beatChallange - beat the challange. Its something like Cloudflare protection.
 //
 // Max reloads count - 5
-func (n *ChromeNavigator) beatChallange(response ...StateChannel) error {
-	state := &ChromeStateStatus{
-		Step: NAVIGATION_STATE_CHALLANGE_SOLVED,
-	}
-
-	defer writeToChromeStatusChannel(state, response...)
-
+func (n *ChromeNavigator) beatChallange(ctx context.Context) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			state.Error = errors.New("panic")
+			err = errors.New("panic")
 		}
 	}()
 
-	if n.ClfSolver != nil && n.ClfSolver.Is(n.Page) {
-		state.Error = n.solveWithClfSolver()
-	} else {
-		state.Error = n.solveSimpleChallange()
+	page := n.getPage()
+	if page == nil {
+		return errors.New("page is closed")
 	}
-	return state.Error
+
+	if ctx == nil {
+		ctx = n.getContext()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+	}
+
+	if n.ClfSolver != nil && n.ClfSolver.Is(page) {
+		err = n.solveWithClfSolver(ctx, page)
+	} else {
+		err = n.solveSimpleChallange(ctx)
+	}
+	return err
 }
 
-func (n *ChromeNavigator) solveWithClfSolver() error {
+func (n *ChromeNavigator) solveWithClfSolver(ctx context.Context, page *rod.Page) error {
+	if page == nil {
+		return errors.New("page is closed")
+	}
+
 	errChannel := make(chan error, 1)
 
-	go func() {
-		errChannel <- n.ClfSolver.Solve(n.Page, n.context)
-	}()
+	go func(p *rod.Page) {
+		defer func() {
+			if recover() != nil {
+				errChannel <- errors.New("panic in cloudflare solver")
+			}
+		}()
+		errChannel <- n.ClfSolver.Solve(p, ctx)
+	}(page)
 
 	select {
 	case err := <-errChannel:
@@ -65,13 +80,12 @@ func (n *ChromeNavigator) solveWithClfSolver() error {
 			log.Println("Error solving challenge with Cloudflare solver:", err)
 		}
 		return err
-	case <-n.context.Done():
+	case <-ctx.Done():
 		return errors.New("context canceled")
-
 	}
 }
 
-func (n *ChromeNavigator) solveSimpleChallange() error {
+func (n *ChromeNavigator) solveSimpleChallange(ctx context.Context) error {
 	if !n.hasChallenge() {
 		log.Println("No challange")
 		return nil
@@ -79,10 +93,13 @@ func (n *ChromeNavigator) solveSimpleChallange() error {
 
 	log.Println("Challenge detected, starting to solve...")
 	maxStepCount := 5
-	reloaded := make(chan error)
-	contextChallenge, _ := context.WithTimeout(n.context, CHALLENGE_SOLVE_DURATION)
+	reloaded := make(chan error, 1)
+	contextChallenge, cancel := context.WithTimeout(ctx, CHALLENGE_SOLVE_DURATION)
+	defer cancel()
 
-	reloadFunc := func() { reloaded <- n.WaitResponseAndLoad(contextChallenge) }
+	reloadFunc := func() {
+		reloaded <- n.WaitResponseAndLoad(contextChallenge)
+	}
 	go reloadFunc()
 
 	for {
@@ -114,10 +131,21 @@ func (n *ChromeNavigator) solveSimpleChallange() error {
 }
 
 func (n *ChromeNavigator) hasChallenge() bool {
-	return n.Model.ChallangeSelector != "" && n.hasChallengeElement(n.Model.ChallangeSelector)
+	return n.Model != nil && n.Model.ChallangeSelector != "" && n.hasChallengeElement(n.Model.ChallangeSelector)
 }
 
-func (n *ChromeNavigator) hasChallengeElement(selector string) bool {
-	elements, err := n.Page.Elements(selector)
+func (n *ChromeNavigator) hasChallengeElement(selector string) (has bool) {
+	page := n.getPage()
+	if page == nil {
+		return false
+	}
+
+	defer func() {
+		if recover() != nil {
+			has = false
+		}
+	}()
+
+	elements, err := page.Elements(selector)
 	return err == nil && len(elements) > 0
 }
