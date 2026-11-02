@@ -293,7 +293,7 @@ func (n *ChromeNavigator) gotoUrl(url string, response ...StateChannel) error {
 
 		if !n.JustCreated {
 			if n.Model.DelayBeforeNavigate > 0 {
-				time.Sleep(time.Duration(n.Model.DelayBeforeNavigate) * time.Second)
+				time.Sleep(calculateDelay(n.Model.DelayBeforeNavigate))
 			} else {
 				n.JustCreated = true
 			}
@@ -455,6 +455,7 @@ func (n *ChromeNavigator) createBrowser() (*rod.Browser, error) {
 		if n.Model.UseSystemChrome {
 			if u, err = n.createSystemChrome(); err != nil {
 				n.Model.UseSystemChrome = false
+				n.Model.Visible = true
 			}
 		}
 
@@ -677,12 +678,7 @@ func (n *ChromeNavigator) delayBeforeRead(response ...StateChannel) {
 		return
 	}
 
-	var delayDuration time.Duration
-	if n.Model.DelayBeforeRead < 20 {
-		delayDuration = time.Duration(n.Model.DelayBeforeRead) * time.Second
-	} else {
-		delayDuration = time.Duration(n.Model.DelayBeforeRead) * time.Millisecond
-	}
+	var delayDuration time.Duration = calculateDelay(n.Model.DelayBeforeRead)
 
 	select {
 	case <-n.context.Done():
@@ -744,5 +740,13 @@ func writeToChromeStatusChannel(state *ChromeStateStatus, response ...StateChann
 		for _, ch := range response {
 			ch <- state
 		}
+	}
+}
+
+func calculateDelay(duration int) time.Duration {
+	if duration < 20 {
+		return time.Duration(duration) * time.Second
+	} else {
+		return time.Duration(duration) * time.Millisecond
 	}
 }
