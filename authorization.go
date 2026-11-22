@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -204,6 +205,7 @@ func (navigator *GentelmanNavigator) authorizeResty() error {
 	}
 
 	postResp, err := navigator.Client.R().
+		SetHeader("Referer", navigator.GetUrl()).
 		SetFormData(formData).
 		Post(submitUrl)
 	if err != nil {
@@ -212,38 +214,42 @@ func (navigator *GentelmanNavigator) authorizeResty() error {
 		return errors.New("error navigate")
 	}
 
+	navigator.saveCookies(postResp.Cookies())
+
 	statusCode := int32(postResp.StatusCode())
 	navigator.NavigateStatus.Store(statusCode)
 	navigator.logRequest(statusCode, nil)
 
 	navigator.isAuthorized.Store(true)
 
-	actualUrl := submitUrl
-	if postResp.RawResponse != nil && postResp.RawResponse.Request != nil && postResp.RawResponse.Request.URL != nil {
-		actualUrl = postResp.RawResponse.Request.URL.String()
+	redirectedToTarget := postResp.RawResponse != nil &&
+		postResp.RawResponse.Request != nil &&
+		postResp.RawResponse.Request.Method == http.MethodGet &&
+		postResp.RawResponse.Request.URL != nil &&
+		postResp.RawResponse.Request.URL.String() == navigator.GetUrl()
+
+	if redirectedToTarget {
+		if err := navigator.СreateCrawlerFromHTML(postResp.String()); err != nil {
+			return fmt.Errorf("error create crawler from HTML: %s", err.Error())
+		}
+		return nil
 	}
 
-	if auth.WaitReload {
-		if actualUrl == navigator.GetUrl() {
-			if err := navigator.СreateCrawlerFromHTML(postResp.String()); err != nil {
-				return fmt.Errorf("error create crawler from HTML: %s", err.Error())
-			}
-		} else {
-			getResp, err := navigator.Client.R().Get(navigator.Uri.String())
-			if err != nil {
-				log.Println(err)
-				navigator.logRequest(0, err)
-				return errors.New("error navigate")
-			}
+	getResp, err := navigator.Client.R().Get(navigator.Uri.String())
+	if err != nil {
+		log.Println(err)
+		navigator.logRequest(0, err)
+		return errors.New("error navigate")
+	}
 
-			getStatus := int32(getResp.StatusCode())
-			navigator.NavigateStatus.Store(getStatus)
-			navigator.logRequest(getStatus, nil)
+	navigator.saveCookies(getResp.Cookies())
 
-			if err := navigator.СreateCrawlerFromHTML(getResp.String()); err != nil {
-				return fmt.Errorf("error create crawler from HTML: %s", err.Error())
-			}
-		}
+	getStatus := int32(getResp.StatusCode())
+	navigator.NavigateStatus.Store(getStatus)
+	navigator.logRequest(getStatus, nil)
+
+	if err := navigator.СreateCrawlerFromHTML(getResp.String()); err != nil {
+		return fmt.Errorf("error create crawler from HTML: %s", err.Error())
 	}
 
 	return nil
